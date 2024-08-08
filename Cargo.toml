@@ -4,3 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.86"
+enum_dispatch = "0.3.13"
+num-bigint = "0.4.6"
+num-traits = "0.2.19"
+thiserror = "1.0.63"
