@@ -1,7 +1,8 @@
-use std::default;
-
 use crate::math::{
-    ntt::{params::NTTTable, NTTImplementations},
+    ntt::{
+        params::{NTTParams, NTTTable},
+        NTTImplementations,
+    },
     ring::{
         barrett_reduction::compute_barrett_constants,
         constants::MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
@@ -54,10 +55,6 @@ pub struct SubRing {
     /// Maybe Todo: use box to store the NTTTable
     pub ntt_table: NTTTable,
 }
-
-/// Parameters required for creating an NTT implementation.
-/// (n, modulus, nth_root, mask, b_red_constant, m_red_constant)
-pub type NTTParams = (u64, u64, u64, u64, [u64; 2], u64);
 
 impl SubRing {
     /// Creates a new SubRing with custom NTT transform and primitive Nth root of unity.
