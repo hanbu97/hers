@@ -1,8 +1,11 @@
+use std::default;
+
 use crate::math::{
     ntt::{params::NTTTable, NTTImplementations},
     ring::{
         barrett_reduction::compute_barrett_constants,
         constants::MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
+        montgomery_reduction::compute_montgomery_constant,
     },
 };
 
@@ -43,12 +46,18 @@ pub struct SubRing {
 
     /// Constant for Montgomery Reduction.
     /// Used for fast modular multiplication.
-    /// m_red_constant = -modulus^(-1) mod 2^64
+    /// m_red_constant = modulus^(-1) mod 2^64
+    /// Note: This is equivalent to -modulus^(-1) mod 2^64 in 64-bit unsigned integer arithmetic.
     pub m_red_constant: u64,
 
     /// NTT related constants, including roots of unity and their powers.
+    /// Maybe Todo: use box to store the NTTTable
     pub ntt_table: NTTTable,
 }
+
+/// Parameters required for creating an NTT implementation.
+/// (n, modulus, nth_root, mask, b_red_constant, m_red_constant)
+pub type NTTParams = (u64, u64, u64, u64, [u64; 2], u64);
 
 impl SubRing {
     /// Creates a new SubRing with custom NTT transform and primitive Nth root of unity.
@@ -64,13 +73,13 @@ impl SubRing {
     ///
     /// A Result containing either the new SubRing or an error
     pub fn new_with_custom_ntt<F>(
-        n: usize,
+        n: u64,
         modulus: u64,
         ntt_creator: F,
         nth_root: u64,
     ) -> Result<Self, SubRingError>
     where
-        F: FnOnce(&SubRing, usize) -> NTTImplementations,
+        F: FnOnce(&NTTParams) -> NTTImplementations,
     {
         // Check if N is a power of 2 and greater than the minimum
         if n < MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS || !n.is_power_of_two() {
@@ -79,13 +88,40 @@ impl SubRing {
             ));
         }
 
+        // Check if modulus is suitable for Montgomery reduction
+        // Montgomery reduction is not efficient or well-defined for certain moduli:
+        // 1. When modulus is 0: Modular arithmetic is undefined.
+        // 2. When modulus is a power of 2: Simpler and faster methods exist for modular arithmetic.
+        //    Also, some mathematical properties required for Montgomery reduction don't hold in this case.
+        // The check (modulus & (modulus - 1)) == 0 efficiently detects if modulus is a power of 2:
+        // - If modulus is a power of 2, it has only one bit set.
+        // - Subtracting 1 from it will set all lower bits to 1.
+        // - Bitwise AND of these will be 0 only if modulus was a power of 2.
+        if (modulus & (modulus - 1)) == 0 || modulus == 0 {
+            return Err(SubRingError::InvalidModulusForMontgomery);
+        }
+
         // Calculate the mask
         let mask = calculate_mask(modulus);
 
-        // Computes the fast modular reduction constants for the ring
+        // Computes Barrett reduction constants
         let b_red_constant = compute_barrett_constants(modulus);
 
-        unimplemented!()
+        // Compute Montgomery reduction constant
+        let m_red_constant = compute_montgomery_constant(modulus);
+
+        let ntt = ntt_creator(&(n, modulus, nth_root, mask, b_red_constant, m_red_constant));
+
+        Ok(Self {
+            ntt,
+            n: n as usize,
+            modulus,
+            mask,
+            b_red_constant,
+            m_red_constant,
+            ntt_table: NTTTable::default(),
+            factors: vec![],
+        })
     }
 
     /// Creates a new SubRing with the given parameters.
@@ -111,9 +147,6 @@ impl SubRing {
 
         // // Compute Barrett reduction constants
         // let b_red_constant = compute_barrett_constants(modulus);
-
-        // // Compute Montgomery reduction constant
-        // let m_red_constant = compute_montgomery_constant(modulus);
 
         // // Create NTTTable
         // let ntt_table = NTTTable::new(n, modulus);
@@ -178,10 +211,5 @@ impl SubRing {
 // Helper functions (implementations omitted for brevity)
 fn compute_factors(n: u64) -> Vec<u64> {
     // Compute prime factors of n
-    unimplemented!()
-}
-
-fn compute_montgomery_constant(modulus: u64) -> u64 {
-    // Compute Montgomery reduction constant
     unimplemented!()
 }

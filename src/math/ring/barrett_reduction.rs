@@ -28,9 +28,9 @@ mod tests {
 
         for &(q, expected_hi, expected_lo) in &test_cases {
             let constants = compute_barrett_constants(q);
-            println!("q: {}", q);
-            println!("((2^128)/q)/(2^64): {}", constants[0]);
-            println!("(2^128)/q mod 2^64: {}\n", constants[1]);
+            // println!("q: {}", q);
+            // println!("((2^128)/q)/(2^64): {}", constants[0]);
+            // println!("(2^128)/q mod 2^64: {}\n", constants[1]);
 
             assert_eq!(
                 constants[0], expected_hi,

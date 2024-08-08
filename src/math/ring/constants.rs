@@ -35,4 +35,4 @@ pub const GALOIS_GEN: u64 = 5;
 ///
 /// Note: This value might need adjustment based on specific hardware architectures or if
 /// future CPUs have different optimal sizes for SIMD operations.
-pub const MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS: usize = 8;
+pub const MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS: u64 = 8;
