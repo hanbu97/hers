@@ -1,4 +1,4 @@
-use super::helpers::mul_hi_lo;
+use super::*;
 use num_traits::WrappingMul;
 use std::num::Wrapping;
 
@@ -110,7 +110,7 @@ pub fn m_red_lazy(x: u64, y: u64, q: u64, mred_constant: u64) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use crate::math::ring::barrett_reduction::compute_barrett_constants;
+    use super::barrett::compute_barrett_constants;
 
     use super::*;
 

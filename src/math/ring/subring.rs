@@ -4,9 +4,8 @@ use crate::math::{
         NTTImplementations,
     },
     ring::{
-        barrett_reduction::compute_barrett_constants,
         constants::MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
-        montgomery_reduction::compute_montgomery_constant,
+        reduction::{barrett::compute_barrett_constants, montgomery::compute_montgomery_constant},
     },
 };
 
