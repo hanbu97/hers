@@ -3,6 +3,7 @@ use num_traits::WrappingMul;
 use std::num::Wrapping;
 
 /// Computes the constant m_red_constant = (q^-1) mod 2^64 required for MRed.
+#[inline(always)]
 pub fn compute_montgomery_constant(q: u64) -> u64 {
     let mut mredconstant = 1u64;
     let mut q_temp = q;
@@ -45,7 +46,8 @@ pub fn m_form_lazy(a: u64, q: u64, bred_constant: [u64; 2]) -> u64 {
 }
 
 /// Switches a from the Montgomery domain back to the standard domain by computing a*(1/2^64) mod q.
-pub fn i_m_form(a: u64, q: u64, mred_constant: u64) -> u64 {
+#[inline(always)]
+pub fn im_form(a: u64, q: u64, mred_constant: u64) -> u64 {
     let (r, _) = mul_hi_lo(a.wrapping_mul(mred_constant), q);
     let mut result = q.wrapping_sub(r);
     if result >= q {
@@ -56,7 +58,8 @@ pub fn i_m_form(a: u64, q: u64, mred_constant: u64) -> u64 {
 
 /// Switches a from the Montgomery domain back to the standard domain by computing a*(1/2^64) mod q in constant time.
 /// The result is between 0 and 2*q-1.
-pub fn i_m_form_lazy(a: u64, q: u64, mred_constant: u64) -> u64 {
+#[inline(always)]
+pub fn im_form_lazy(a: u64, q: u64, mred_constant: u64) -> u64 {
     let (r, _) = mul_hi_lo(a.wrapping_mul(mred_constant), q);
     q.wrapping_sub(r)
 }
@@ -360,7 +363,7 @@ mod tests {
 
         println!("Testing i_m_form:");
         for &(input, expected) in &test_cases {
-            let result = i_m_form(input, q, mred_constant);
+            let result = im_form(input, q, mred_constant);
             println!("i_m_form({}) = {}", input, result);
             assert_eq!(
                 result, expected,
@@ -398,7 +401,7 @@ mod tests {
 
         println!("\nTesting i_m_form_lazy:");
         for &(input, expected) in &test_cases {
-            let result = i_m_form_lazy(input, q, mred_constant);
+            let result = im_form_lazy(input, q, mred_constant);
             println!("i_m_form_lazy({}) = {}", input, result);
             assert_eq!(
                 result, expected,

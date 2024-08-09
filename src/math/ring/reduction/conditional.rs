@@ -1,4 +1,5 @@
 /// CRed reduce returns a mod q where a is between 0 and 2*q-1.
+#[inline(always)]
 pub fn c_red(a: u64, q: u64) -> u64 {
     if a >= q {
         a - q

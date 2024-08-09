@@ -5,6 +5,7 @@ use num_traits::ToPrimitive;
 
 /// Computes the constant for the BRed algorithm.
 /// Returns [((2^128)/q)/(2^64), (2^128)/q mod 2^64].
+#[inline(always)]
 pub fn compute_barrett_constants(q: u64) -> [u64; 2] {
     let barrett = ((BigUint::from(1u64) << 128usize) / BigUint::from(q))
         .to_u128()
@@ -16,6 +17,7 @@ pub fn compute_barrett_constants(q: u64) -> [u64; 2] {
     [mhi, mlo]
 }
 
+#[inline(always)]
 pub fn b_red_add(a: u64, q: u64, bred_constant: [u64; 2]) -> u64 {
     let (mhi, _) = mul_hi_lo(a, bred_constant[0]);
     let mut r = a.wrapping_sub(mhi.wrapping_mul(q));
@@ -26,12 +28,14 @@ pub fn b_red_add(a: u64, q: u64, bred_constant: [u64; 2]) -> u64 {
 }
 /// Computes a mod q in constant time.
 /// The result is between 0 and 2*q-1.
+#[inline(always)]
 pub fn b_red_add_lazy(x: u64, q: u64, bred_constant: [u64; 2]) -> u64 {
     let (s0, _) = mul_hi_lo(x, bred_constant[0]);
     x.wrapping_sub(s0.wrapping_mul(q))
 }
 
 /// Computes x*y mod q.
+#[inline(always)]
 pub fn b_red(x: u64, y: u64, q: u64, bred_constant: [u64; 2]) -> u64 {
     let (mhi, mlo) = mul_hi_lo(x, y);
 
@@ -62,6 +66,7 @@ pub fn b_red(x: u64, y: u64, q: u64, bred_constant: [u64; 2]) -> u64 {
 
 /// Computes x*y mod q in constant time.
 /// The result is between 0 and 2*q-1.
+#[inline(always)]
 pub fn b_red_lazy(x: u64, y: u64, q: u64, bred_constant: [u64; 2]) -> u64 {
     let (mhi, mlo) = mul_hi_lo(x, y);
 
