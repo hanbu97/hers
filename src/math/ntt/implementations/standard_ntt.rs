@@ -1,4 +1,9 @@
-use crate::math::ntt::params::NTTParams;
+use crate::math::{
+    ntt::params::NTTParams,
+    ring::operations::ntt_operations::{
+        intt_standard, intt_standard_lazy, ntt_standard, ntt_standard_lazy,
+    },
+};
 
 use super::*;
 
@@ -22,31 +27,51 @@ impl StandardNTT {
 }
 
 impl NumberTheoreticTransform for StandardNTT {
-    fn forward(&self, p1: &mut [u64], p2: &[u64]) {
-        assert_eq!(p1.len(), self.base.n, "Input length must match NTT size");
-
-        // Placeholder for the actual forward NTT algorithm
-        unimplemented!("Forward NTT not yet implemented");
+    fn forward(&self, p1: &[u64], p2: &mut [u64]) {
+        ntt_standard(
+            p1,
+            p2,
+            self.base.n,
+            self.base.modulus,
+            self.base.m_red_constant,
+            self.base.b_red_constant,
+            &self.base.ntt_table.roots_forward,
+        )
     }
 
-    fn forward_lazy(&self, p1: &mut [u64], p2: &[u64]) {
-        unimplemented!("Forward lazy NTT not yet implemented");
+    fn forward_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+        ntt_standard_lazy(
+            p1,
+            p2,
+            self.base.n,
+            self.base.modulus,
+            self.base.m_red_constant,
+            &self.base.ntt_table.roots_forward,
+        )
     }
 
-    fn backward(&self, p1: &mut [u64], p2: &[u64]) {
-        assert_eq!(p1.len(), self.base.n, "Input length must match NTT size");
-
-        // Placeholder for the actual backward NTT algorithm
-        unimplemented!("Backward NTT not yet implemented");
-
-        // A real implementation would be similar to forward, but with these changes:
-        // 1. Use roots_backward instead of roots_forward
-        // 2. Reverse the order of the stages
-        // 3. Apply the scaling factor n_inv at the end
+    fn backward(&self, p1: &[u64], p2: &mut [u64]) {
+        intt_standard(
+            p1,
+            p2,
+            self.base.n,
+            self.base.ntt_table.n_inv,
+            self.base.modulus,
+            self.base.m_red_constant,
+            &self.base.ntt_table.roots_backward,
+        )
     }
 
-    fn backward_lazy(&self, p1: &mut [u64], p2: &[u64]) {
-        unimplemented!("Backward lazy NTT not yet implemented");
+    fn backward_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+        intt_standard_lazy(
+            p1,
+            p2,
+            self.base.n,
+            self.base.ntt_table.n_inv,
+            self.base.modulus,
+            self.base.m_red_constant,
+            &self.base.ntt_table.roots_backward,
+        )
     }
 }
 

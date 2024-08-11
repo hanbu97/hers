@@ -57,6 +57,18 @@ pub fn reduce_vec(p1: &[u64], p2: &mut [u64], modulus: u64, bred_constant: [u64;
         .for_each(|(reduced, out)| *out = reduced);
 }
 
+/// Reduces all elements in a vector modulo q using Barrett reduction
+///
+/// # Arguments
+/// * `p` - Input/Output slice
+/// * `modulus` - Modulus
+/// * `bred_constant` - Barrett reduction constants
+#[inline(always)]
+pub fn reduce_vec_self(p: &mut [u64], modulus: u64, bred_constant: [u64; 2]) {
+    p.iter_mut()
+        .for_each(|x| *x = b_red_add(*x, modulus, bred_constant));
+}
+
 #[inline(always)]
 pub fn reduce_lazy_vec(p1: &[u64], p2: &mut [u64], modulus: u64, bred_constant: [u64; 2]) {
     p1.iter()
@@ -363,6 +375,14 @@ pub fn sub_scalar_vec(p1: &[u64], scalar: u64, p2: &mut [u64], modulus: u64) {
     });
 }
 
+/// Multiplies all elements in a vector by a scalar using Montgomery multiplication
+///
+/// # Arguments
+/// * `p1` - Input slice
+/// * `scalar_mont` - Scalar in Montgomery form
+/// * `p2` - Output slice
+/// * `modulus` - Modulus
+/// * `mred_constant` - Montgomery reduction constant
 #[inline(always)]
 pub fn mul_scalar_montgomery_vec(
     p1: &[u64],
@@ -376,6 +396,33 @@ pub fn mul_scalar_montgomery_vec(
     });
 }
 
+/// Multiplies all elements in a vector by a scalar using Montgomery multiplication (in-place version)
+///
+/// # Arguments
+/// * `p` - Input/Output slice
+/// * `scalar_mont` - Scalar in Montgomery form
+/// * `modulus` - Modulus
+/// * `mred_constant` - Montgomery reduction constant
+#[inline(always)]
+pub fn mul_scalar_montgomery_vec_self(
+    p: &mut [u64],
+    scalar_mont: u64,
+    modulus: u64,
+    mred_constant: u64,
+) {
+    p.iter_mut().for_each(|x| {
+        *x = m_red(*x, scalar_mont, modulus, mred_constant);
+    });
+}
+
+/// Multiplies all elements in a vector by a scalar using lazy Montgomery multiplication
+///
+/// # Arguments
+/// * `p1` - Input slice
+/// * `scalar_mont` - Scalar in Montgomery form
+/// * `p2` - Output slice
+/// * `modulus` - Modulus
+/// * `mred_constant` - Montgomery reduction constant
 #[inline(always)]
 pub fn mul_scalar_montgomery_lazy_vec(
     p1: &[u64],
@@ -386,6 +433,25 @@ pub fn mul_scalar_montgomery_lazy_vec(
 ) {
     p1.iter().zip(p2.iter_mut()).for_each(|(&x, z)| {
         *z = m_red_lazy(x, scalar_mont, modulus, mred_constant);
+    });
+}
+
+/// Multiplies all elements in a vector by a scalar using lazy Montgomery multiplication (in-place version)
+///
+/// # Arguments
+/// * `p` - Input/Output slice
+/// * `scalar_mont` - Scalar in Montgomery form
+/// * `modulus` - Modulus
+/// * `mred_constant` - Montgomery reduction constant
+#[inline(always)]
+pub fn mul_scalar_montgomery_lazy_vec_self(
+    p: &mut [u64],
+    scalar_mont: u64,
+    modulus: u64,
+    mred_constant: u64,
+) {
+    p.iter_mut().for_each(|x| {
+        *x = m_red_lazy(*x, scalar_mont, modulus, mred_constant);
     });
 }
 

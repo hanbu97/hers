@@ -392,4 +392,28 @@ impl SubRing {
     pub fn im_form(&self, p1: &[u64], p2: &mut [u64]) {
         im_form_vec(p1, p2, self.modulus, self.m_red_constant);
     }
+
+    /// Evaluates p2 = NTT(p1).
+    #[inline(always)]
+    pub fn ntt(&self, p1: &[u64], p2: &mut [u64]) {
+        self.ntt.forward(p1, p2);
+    }
+
+    /// Evaluates p2 = NTT(p1) with p2 in [0, 2*modulus-1].
+    #[inline(always)]
+    pub fn ntt_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+        self.ntt.forward_lazy(p1, p2);
+    }
+
+    /// Evaluates p2 = INTT(p1).
+    #[inline(always)]
+    pub fn intt(&self, p1: &[u64], p2: &mut [u64]) {
+        self.ntt.backward(p1, p2);
+    }
+
+    /// Evaluates p2 = INTT(p1) with p2 in [0, 2*modulus-1].
+    #[inline(always)]
+    pub fn intt_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+        self.ntt.backward_lazy(p1, p2);
+    }
 }

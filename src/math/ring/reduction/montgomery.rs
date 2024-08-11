@@ -103,12 +103,12 @@ pub fn m_red(x: u64, y: u64, q: u64, mred_constant: u64) -> u64 {
     r
 }
 
-/// Computes x * y * (1/2^64) mod q in constant time.
-/// The result is between 0 and 2*q-1.
-pub fn m_red_lazy(x: u64, y: u64, q: u64, mred_constant: u64) -> u64 {
+/// Computes x * y * (1/2^64) mod modulus in constant time.
+/// The result is between 0 and 2*modulus-1.
+pub fn m_red_lazy(x: u64, y: u64, modulus: u64, mred_constant: u64) -> u64 {
     let (ahi, alo) = mul_hi_lo(x, y);
-    let (h, _) = mul_hi_lo(alo.wrapping_mul(mred_constant), q);
-    ahi.wrapping_sub(h).wrapping_add(q)
+    let (h, _) = mul_hi_lo(alo.wrapping_mul(mred_constant), modulus);
+    ahi.wrapping_sub(h).wrapping_add(modulus)
 }
 
 #[cfg(test)]
