@@ -32,7 +32,7 @@ impl NumberTheoreticTransform for StandardNTT {
         ntt_standard(
             p1,
             p2,
-            self.base.n,
+            self.base.n as u64,
             self.base.modulus,
             self.base.m_red_constant,
             self.base.b_red_constant,

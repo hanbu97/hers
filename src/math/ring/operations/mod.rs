@@ -8,6 +8,7 @@ use super::{
 use crate::math::ring::reduction::montgomery::*;
 
 pub mod ntt_operations;
+pub mod prime_operations;
 pub mod vec_operations;
 
 /// Compute rescale constants for subring moduli

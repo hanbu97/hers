@@ -33,7 +33,7 @@ impl Ring {
     /// Creates a new RNS Ring with degree N and coefficient moduli Moduli with Standard NTT.
     ///
     /// # Arguments
-    /// * `n` - The degree of the ring. Must be a power of two larger than 8.
+    /// * `degree` - The degree of the ring. Must be a power of two larger than 8.
     /// * `moduli` - A non-empty vector of distinct prime moduli. All moduli must also be equal to 1 modulo 2N.
     ///
     /// # Returns
@@ -42,7 +42,7 @@ impl Ring {
     ///
     /// This function creates a new RNS Ring using the Standard NTT. It performs various checks on the input parameters
     /// to ensure they are valid for creating an NTT-enabling ring.
-    pub fn new(n: usize, moduli: Vec<u64>) -> Result<Self, RingError> {
+    pub fn new(degree: u64, moduli: Vec<u64>) -> Result<Self, RingError> {
         unimplemented!()
     }
 
@@ -52,7 +52,7 @@ impl Ring {
         ntt: NTTImplementations,
     ) -> Result<Self, RingError> {
         // Check if N is a power of 2
-        if (n & (n - 1)) != 0 {
+        if !n.is_power_of_two() {
             return Err(RingError::InvalidRingDegree(n));
         }
 

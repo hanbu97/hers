@@ -38,14 +38,14 @@ impl NTTTable {
     ///
     /// # Arguments
     ///
-    /// * `n` - The size of the NTT (must be a power of 2)
+    /// * `degree` - The size of the NTT (must be a power of 2)
     /// * `prime` - The prime modulus
     /// * `nth_root` - The N-th root of unity modulo prime
     ///
     /// # Returns
     ///
     /// A new NTTTable instance
-    pub fn new(n: usize, prime: u64, nth_root: u64) -> Self {
+    pub fn new(degree: u64, prime: u64, nth_root: u64) -> Self {
         // Implementation details omitted for brevity
         // This would involve computing all the necessary values:
         // 1. Finding the primitive root

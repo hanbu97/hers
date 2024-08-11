@@ -8,7 +8,7 @@ use super::*;
 /// # Arguments
 /// * `p1` - Input slice
 /// * `p2` - Output slice
-/// * `n` - Ring size
+/// * `degree` - Ring size
 /// * `modulus` - Modulus
 /// * `m_red_constant` - Montgomery reduction constant
 /// * `b_red_constant` - Barrett reduction constants
@@ -16,13 +16,13 @@ use super::*;
 pub fn ntt_standard(
     p1: &[u64],
     p2: &mut [u64],
-    n: usize,
+    degree: u64,
     modulus: u64,
     m_red_constant: u64,
     b_red_constant: [u64; 2],
     roots: &[u64],
 ) {
-    ntt_core_lazy(p1, p2, n, modulus, m_red_constant, roots);
+    ntt_core_lazy(p1, p2, degree as usize, modulus, m_red_constant, roots);
     reduce_vec_self(p2, modulus, b_red_constant);
 }
 
@@ -81,22 +81,22 @@ pub fn intt_standard(
 pub fn ntt_core_lazy(
     p1: &[u64],
     p2: &mut [u64],
-    n: usize,
+    degree: usize,
     modulus: u64,
     m_red_constant: u64,
     roots: &[u64],
 ) {
-    if p1.len() < n || p2.len() < n || roots.len() < n {
+    if p1.len() < degree || p2.len() < degree || roots.len() < degree {
         panic!(
             "cannot ntt_core_lazy: ensure that len(p1)={}, len(p2)={} and len(roots)={} >= N={}",
             p1.len(),
             p2.len(),
             roots.len(),
-            n
+            degree
         );
     }
 
-    ntt_lazy(p1, p2, n, modulus, m_red_constant, roots);
+    ntt_lazy(p1, p2, degree, modulus, m_red_constant, roots);
 }
 
 /// Performs the INTT algorithm without final reduction and multiplication by N^-1

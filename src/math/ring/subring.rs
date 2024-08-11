@@ -1,11 +1,6 @@
 use super::{errors::SubRingError, operations::vec_operations::*};
 use crate::math::{
-    ntt::{
-        self,
-        params::{NTTParams, NTTTable},
-        traits::NumberTheoreticTransform,
-        NTTImplementations,
-    },
+    ntt::{params::NTTTable, traits::NumberTheoreticTransform, NTTImplementations},
     ring::{
         constants::MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
         reduction::{barrett::compute_barrett_constants, montgomery::compute_montgomery_constant},
@@ -26,7 +21,7 @@ pub struct SubRing {
 
     /// Number of coefficients in the polynomial.
     /// This is typically a power of 2 for efficient NTT operations.
-    pub n: usize,
+    pub degree: u64,
 
     /// The prime modulus defining the finite field.
     pub modulus: u64,
@@ -61,7 +56,7 @@ impl SubRing {
     ///
     /// # Arguments
     ///
-    /// * `n` - Degree of the ring (must be a power of two larger than 8)
+    /// * `degree` - Degree of the ring (must be a power of two larger than 8)
     /// * `modulus` - The modulus (should be equal to 1 modulo the root of unity)
     /// * `ntt_creator` - Function to create a custom NTT implementation
     /// * `nth_root` - The primitive Nth root of unity
@@ -70,13 +65,13 @@ impl SubRing {
     ///
     /// A Result containing either the new SubRing or an error
     pub fn new_with_custom_ntt(
-        n: u64,
+        degree: u64,
         modulus: u64,
         // ntt_creator: F,
         ntt: NTTImplementations,
     ) -> Result<Self, SubRingError> {
-        // Check if N is a power of 2 and greater than the minimum
-        if n < MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS || !n.is_power_of_two() {
+        // Check if degree is a power of 2 and greater than the minimum
+        if degree < MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS || !degree.is_power_of_two() {
             return Err(SubRingError::InvalidRingDegree(
                 MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
             ));
@@ -108,7 +103,7 @@ impl SubRing {
 
         Ok(Self {
             ntt,
-            n: n as usize,
+            degree,
             modulus,
             mask,
             b_red_constant,

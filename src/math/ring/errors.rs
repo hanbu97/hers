@@ -29,3 +29,13 @@ pub enum RingError {
     #[error("Subring error: {0}")]
     SubRingError(#[from] SubRingError),
 }
+
+#[derive(Error, Debug, PartialEq)]
+pub enum MathError {
+    #[error("Composite factor found")]
+    CompositeFactor,
+    #[error("Incomplete factor list")]
+    IncompleteFactorList,
+    #[error("Invalid primitive root")]
+    InvalidPrimitiveRoot,
+}
