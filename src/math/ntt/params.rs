@@ -4,7 +4,7 @@ pub type NTTParams = (u64, u64, u64, u64, [u64; 2], u64);
 
 /// NTTTable stores all the constants that are specifically tied to the Number Theoretic Transform (NTT).
 /// These precomputed values are used to optimize NTT operations.
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct NTTTable {
     /// The N-th root of unity modulo the prime field.
     /// This value satisfies: nthroot^N ≡ 1 (mod prime) and nthroot^k ≢ 1 (mod prime) for all k < N.

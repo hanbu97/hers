@@ -1,5 +1,6 @@
 use crate::math::ntt::{params::NTTTable, traits::NumberTheoreticTransform};
 
+#[derive(Debug, Clone)]
 pub struct NTTBase {
     pub n: usize,                 // Degree of the polynomial
     pub modulus: u64,             // Modulus for the ring

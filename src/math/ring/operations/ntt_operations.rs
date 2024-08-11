@@ -1,8 +1,7 @@
-use crate::math::ring::reduction::montgomery::*;
-
 use super::vec_operations::{
     mul_scalar_montgomery_lazy_vec_self, mul_scalar_montgomery_vec_self, reduce_vec_self,
 };
+use super::*;
 
 /// Performs the NTT algorithm with final reduction
 ///

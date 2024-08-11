@@ -7,6 +7,7 @@ use crate::math::{
 
 use super::*;
 
+#[derive(Debug, Clone)]
 pub struct StandardNTT {
     pub base: NTTBase,
 }

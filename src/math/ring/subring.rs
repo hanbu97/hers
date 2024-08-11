@@ -1,6 +1,7 @@
 use super::{errors::SubRingError, operations::vec_operations::*};
 use crate::math::{
     ntt::{
+        self,
         params::{NTTParams, NTTTable},
         traits::NumberTheoreticTransform,
         NTTImplementations,
@@ -68,15 +69,12 @@ impl SubRing {
     /// # Returns
     ///
     /// A Result containing either the new SubRing or an error
-    pub fn new_with_custom_ntt<F>(
+    pub fn new_with_custom_ntt(
         n: u64,
         modulus: u64,
-        ntt_creator: F,
-        nth_root: u64,
-    ) -> Result<Self, SubRingError>
-    where
-        F: FnOnce(&NTTParams) -> NTTImplementations,
-    {
+        // ntt_creator: F,
+        ntt: NTTImplementations,
+    ) -> Result<Self, SubRingError> {
         // Check if N is a power of 2 and greater than the minimum
         if n < MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS || !n.is_power_of_two() {
             return Err(SubRingError::InvalidRingDegree(
@@ -106,7 +104,7 @@ impl SubRing {
         // Compute Montgomery reduction constant
         let m_red_constant = compute_montgomery_constant(modulus);
 
-        let ntt = ntt_creator(&(n, modulus, nth_root, mask, b_red_constant, m_red_constant));
+        // let ntt = ntt_creator(&(n, modulus, nth_root, mask, b_red_constant, m_red_constant));
 
         Ok(Self {
             ntt,

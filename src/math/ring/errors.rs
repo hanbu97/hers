@@ -13,3 +13,19 @@ pub enum SubRingError {
     #[error("Computation error: {0}")]
     ComputationError(String),
 }
+
+#[derive(Error, Debug)]
+pub enum RingError {
+    #[error("Invalid ring degree {0}: must be a power of 2")]
+    InvalidRingDegree(u64),
+    #[error("Moduli must be non-empty")]
+    EmptyModuli,
+    #[error("All moduli must be distinct primes")]
+    NonDistinctPrimeModuli,
+    #[error("All moduli must be equal to 1 modulo 2N")]
+    InvalidModuli,
+
+    // subring errors
+    #[error("Subring error: {0}")]
+    SubRingError(#[from] SubRingError),
+}

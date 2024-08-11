@@ -12,6 +12,7 @@ use self::params::{NTTParams, NTTTable};
 
 // In ntt/implementations/mod.rs
 #[enum_dispatch(NumberTheoreticTransform)]
+#[derive(Debug, Clone)]
 pub enum NTTImplementations {
     StandardNTT,
     // OptimizedNTT,
