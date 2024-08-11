@@ -1,6 +1,8 @@
+use super::{errors::SubRingError, operations::vec_operations::*};
 use crate::math::{
     ntt::{
         params::{NTTParams, NTTTable},
+        traits::NumberTheoreticTransform,
         NTTImplementations,
     },
     ring::{
@@ -8,8 +10,6 @@ use crate::math::{
         reduction::{barrett::compute_barrett_constants, montgomery::compute_montgomery_constant},
     },
 };
-
-use super::errors::SubRingError;
 
 fn calculate_mask(modulus: u64) -> u64 {
     (1u64 << (64 - (modulus - 1).leading_zeros())) - 1
@@ -120,92 +120,276 @@ impl SubRing {
         })
     }
 
-    /// Creates a new SubRing with the given parameters.
-    ///
-    /// # Arguments
-    ///
-    /// * `n` - Number of coefficients (must be a power of 2)
-    /// * `modulus` - The prime modulus
-    ///
-    /// # Returns
-    ///
-    /// A new SubRing instance
-    pub fn new(n: usize, modulus: u64) -> Self {
-        unimplemented!()
-        // // Verify that n is a power of 2
-        // assert!(n.is_power_of_two(), "n must be a power of 2");
-
-        // // Compute factors of modulus - 1
-        // let factors = compute_factors(modulus - 1);
-
-        // // Compute mask
-        // let mask = (1u64 << modulus.bits()) - 1;
-
-        // // Compute Barrett reduction constants
-        // let b_red_constant = compute_barrett_constants(modulus);
-
-        // // Create NTTTable
-        // let ntt_table = NTTTable::new(n, modulus);
-
-        // // Create the NTT implementation
-        // let ntt = ntt_creator();
-
-        // SubRing {
-        //     ntt,
-        //     n,
-        //     modulus,
-        //     factors,
-        //     mask,
-        //     b_red_constant,
-        //     m_red_constant,
-        //     ntt_table,
-        // }
+    /// Evaluates p3 = p1 + p2 (mod modulus).
+    #[inline(always)]
+    pub fn add(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        add_vec(p1, p2, p3, self.modulus);
     }
 
-    // pub fn
-
-    /// Performs modular addition.
-    pub fn add(&self, a: u64, b: u64) -> u64 {
-        let sum = a + b;
-        if sum >= self.modulus {
-            sum - self.modulus
-        } else {
-            sum
-        }
+    /// Evaluates p3 = p1 + p2.
+    #[inline(always)]
+    pub fn add_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        add_lazy_vec(p1, p2, p3);
     }
 
-    /// Performs modular subtraction.
-    pub fn sub(&self, a: u64, b: u64) -> u64 {
-        if a >= b {
-            a - b
-        } else {
-            self.modulus - b + a
-        }
+    /// Evaluates p3 = p1 - p2 (mod modulus).
+    #[inline(always)]
+    pub fn sub(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        sub_vec(p1, p2, p3, self.modulus);
     }
 
-    /// Performs modular multiplication using Montgomery reduction.
-    pub fn mul(&self, a: u64, b: u64) -> u64 {
-        self.montgomery_reduce((a as u128 * b as u128) as u64)
+    /// Evaluates p3 = p1 - p2.
+    #[inline(always)]
+    pub fn sub_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        sub_lazy_vec(p1, p2, p3, self.modulus);
     }
 
-    /// Performs Montgomery reduction.
-    fn montgomery_reduce(&self, t: u64) -> u64 {
-        unimplemented!()
-
-        // let m = (t as u128 * self.m_red_constant as u128) as u64;
-        // let t = (t as u128 + (m as u128 * self.modulus as u128)) >> 64;
-        // if t >= self.modulus {
-        //     t - self.modulus
-        // } else {
-        //     t
-        // }
+    /// Evaluates p2 = -p1 (mod modulus).
+    #[inline(always)]
+    pub fn neg(&self, p1: &[u64], p2: &mut [u64]) {
+        neg_vec(p1, p2, self.modulus);
     }
 
-    // Additional methods for NTT operations, modular exponentiation, etc. would be implemented here
-}
+    /// Evaluates p2 = p1 (mod modulus).
+    #[inline(always)]
+    pub fn reduce(&self, p1: &[u64], p2: &mut [u64]) {
+        reduce_vec(p1, p2, self.modulus, self.b_red_constant);
+    }
 
-// Helper functions (implementations omitted for brevity)
-fn compute_factors(n: u64) -> Vec<u64> {
-    // Compute prime factors of n
-    unimplemented!()
+    /// Evaluates p2 = p1 (mod modulus) with p2 in range [0, 2*modulus-1].
+    #[inline(always)]
+    pub fn reduce_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+        reduce_lazy_vec(p1, p2, self.modulus, self.b_red_constant);
+    }
+
+    /// Evaluates p3 = p1*p2.
+    #[inline(always)]
+    pub fn mul_coeffs_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_lazy_vec(p1, p2, p3);
+    }
+
+    /// Evaluates p3 = p3 + p1*p2.
+    #[inline(always)]
+    pub fn mul_coeffs_lazy_then_add_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_lazy_then_add_lazy_vec(p1, p2, p3);
+    }
+
+    /// Evaluates p3 = p1*p2 (mod modulus).
+    #[inline(always)]
+    pub fn mul_coeffs_barrett(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_barrett_vec(p1, p2, p3, self.modulus, self.b_red_constant);
+    }
+
+    /// Evaluates p3 = p1*p2 (mod modulus) with p3 in [0, 2*modulus-1].
+    #[inline(always)]
+    pub fn mul_coeffs_barrett_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_barrett_lazy_vec(p1, p2, p3, self.modulus, self.b_red_constant);
+    }
+
+    /// Evaluates p3 = p3 + (p1*p2) (mod modulus).
+    #[inline(always)]
+    pub fn mul_coeffs_barrett_then_add(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_then_add_vec(p1, p2, p3, self.modulus, self.b_red_constant);
+    }
+
+    /// Evaluates p3 = p3 + p1*p2 (mod modulus).
+    #[inline(always)]
+    pub fn mul_coeffs_barrett_then_add_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_barrett_then_add_lazy_vec(p1, p2, p3, self.modulus, self.b_red_constant);
+    }
+
+    /// Evaluates p3 = p1*p2 (mod modulus).
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = p1*p2 (mod modulus) with p3 in range [0, 2*modulus-1].
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_lazy_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = p3 + (p1*p2) (mod modulus).
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_then_add(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_then_add_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = p3 + (p1*p2 (mod modulus)).
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_then_add_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_then_add_lazy_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = p3 + p1*p2 (mod modulus) with p3 in range [0, 3modulus-2].
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_lazy_then_add_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_lazy_then_add_lazy_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = p3 - p1*p2 (mod modulus).
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_then_sub(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_then_sub_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = p3 - p1*p2 (mod modulus) with p3 in range [0, 2*modulus-2].
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_then_sub_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_then_sub_lazy_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = p3 - p1*p2 (mod modulus) with p3 in range [0, 3*modulus-2].
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_lazy_then_sub_lazy(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_lazy_then_sub_lazy_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = - p1*p2 (mod modulus) with p3 in range [0, 2*modulus-2].
+    #[inline(always)]
+    pub fn mul_coeffs_montgomery_lazy_then_neg(&self, p1: &[u64], p2: &[u64], p3: &mut [u64]) {
+        mul_coeffs_montgomery_lazy_then_neg_vec(p1, p2, p3, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p3 = (p1+p2)*scalar_mont (mod modulus).
+    #[inline(always)]
+    pub fn add_lazy_then_mul_scalar_montgomery(
+        &self,
+        p1: &[u64],
+        p2: &[u64],
+        scalar_mont: u64,
+        p3: &mut [u64],
+    ) {
+        add_lazy_then_mul_scalar_montgomery_vec(
+            p1,
+            p2,
+            scalar_mont,
+            p3,
+            self.modulus,
+            self.m_red_constant,
+        );
+    }
+
+    /// Evaluates p2 = (scalar_mont0+p1)*scalar_mont1 (mod modulus).
+    #[inline(always)]
+    pub fn add_scalar_lazy_then_mul_scalar_montgomery(
+        &self,
+        p1: &[u64],
+        scalar0: u64,
+        scalar_mont1: u64,
+        p2: &mut [u64],
+    ) {
+        add_scalar_lazy_then_mul_scalar_montgomery_vec(
+            p1,
+            scalar0,
+            scalar_mont1,
+            p2,
+            self.modulus,
+            self.m_red_constant,
+        );
+    }
+
+    /// Evaluates p2 = p1 + scalar (mod modulus).
+    #[inline(always)]
+    pub fn add_scalar(&self, p1: &[u64], scalar: u64, p2: &mut [u64]) {
+        add_scalar_vec(p1, scalar, p2, self.modulus);
+    }
+
+    /// Evaluates p2 = p1 + scalar.
+    #[inline(always)]
+    pub fn add_scalar_lazy(&self, p1: &[u64], scalar: u64, p2: &mut [u64]) {
+        add_scalar_lazy_vec(p1, scalar, p2);
+    }
+
+    /// Evaluates p2 = 2*modulus - p1 + scalar.
+    #[inline(always)]
+    pub fn add_scalar_lazy_then_neg_two_modulus_lazy(
+        &self,
+        p1: &[u64],
+        scalar: u64,
+        p2: &mut [u64],
+    ) {
+        add_scalar_lazy_then_neg_two_modulus_lazy_vec(p1, scalar, p2, self.modulus);
+    }
+
+    /// Evaluates p2 = p1 - scalar (mod modulus).
+    #[inline(always)]
+    pub fn sub_scalar(&self, p1: &[u64], scalar: u64, p2: &mut [u64]) {
+        sub_scalar_vec(p1, scalar, p2, self.modulus);
+    }
+
+    /// Evaluates p2 = p1*scalar_mont (mod modulus).
+    #[inline(always)]
+    pub fn mul_scalar_montgomery(&self, p1: &[u64], scalar_mont: u64, p2: &mut [u64]) {
+        mul_scalar_montgomery_vec(p1, scalar_mont, p2, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p2 = p1*scalar_mont (mod modulus) with p2 in range [0, 2*modulus-1].
+    #[inline(always)]
+    pub fn mul_scalar_montgomery_lazy(&self, p1: &[u64], scalar_mont: u64, p2: &mut [u64]) {
+        mul_scalar_montgomery_lazy_vec(p1, scalar_mont, p2, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p2 = p2 + p1*scalar_mont (mod modulus).
+    #[inline(always)]
+    pub fn mul_scalar_montgomery_then_add(&self, p1: &[u64], scalar_mont: u64, p2: &mut [u64]) {
+        mul_scalar_montgomery_then_add_vec(p1, scalar_mont, p2, self.modulus, self.m_red_constant);
+    }
+
+    /// Evaluates p2 = scalar + p1*scalar_mont (mod modulus).
+    #[inline(always)]
+    pub fn mul_scalar_montgomery_then_add_scalar(
+        &self,
+        p1: &[u64],
+        scalar0: u64,
+        scalar_mont1: u64,
+        p2: &mut [u64],
+    ) {
+        mul_scalar_montgomery_then_add_scalar_vec(
+            p1,
+            scalar0,
+            scalar_mont1,
+            p2,
+            self.modulus,
+            self.m_red_constant,
+        );
+    }
+
+    /// Evaluates p3 = (p1 + two_modulus - p2) * scalar_mont (mod modulus).
+    #[inline(always)]
+    pub fn sub_then_mul_scalar_montgomery_two_modulus(
+        &self,
+        p1: &[u64],
+        p2: &[u64],
+        scalar_mont: u64,
+        p3: &mut [u64],
+    ) {
+        sub_then_mul_scalar_montgomery_two_modulus_vec(
+            p1,
+            p2,
+            scalar_mont,
+            p3,
+            self.modulus,
+            self.m_red_constant,
+        );
+    }
+
+    /// Evaluates p2 = p1 * 2^64 (mod modulus).
+    #[inline(always)]
+    pub fn m_form(&self, p1: &[u64], p2: &mut [u64]) {
+        m_form_vec(p1, p2, self.modulus, self.b_red_constant);
+    }
+
+    /// Evaluates p2 = p1 * 2^64 (mod modulus) with p2 in the range [0, 2*modulus-1].
+    #[inline(always)]
+    pub fn m_form_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+        m_form_lazy_vec(p1, p2, self.modulus, self.b_red_constant);
+    }
+
+    /// Evaluates p2 = p1 * (2^64)^-1 (mod modulus).    
+    #[inline(always)]
+    pub fn im_form(&self, p1: &[u64], p2: &mut [u64]) {
+        im_form_vec(p1, p2, self.modulus, self.m_red_constant);
+    }
 }

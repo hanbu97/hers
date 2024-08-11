@@ -1,6 +1,6 @@
 use crate::math::ring::reduction::conditional::c_red;
 
-use super::reduction::{
+use super::super::reduction::{
     barrett::{b_red, b_red_add, b_red_add_lazy, b_red_lazy},
     montgomery::{im_form, m_form, m_form_lazy, m_red, m_red_lazy},
 };
