@@ -7,6 +7,12 @@ pub trait PrimeChecking {
     fn is_prime(&self) -> bool;
 }
 
+impl PrimeChecking for u32 {
+    fn is_prime(&self) -> bool {
+        probably_prime(&BigUint::from(*self), 0)
+    }
+}
+
 impl PrimeChecking for u64 {
     fn is_prime(&self) -> bool {
         probably_prime(&BigUint::from(*self), 0)
