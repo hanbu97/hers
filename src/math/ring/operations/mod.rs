@@ -7,6 +7,7 @@ use super::{
 };
 use crate::math::ring::reduction::montgomery::*;
 
+pub mod factorization;
 pub mod ntt_operations;
 pub mod prime_operations;
 pub mod vec_operations;
