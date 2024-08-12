@@ -1,7 +1,5 @@
 // ref: https://github.com/dignifiedquire/num-bigint
 use num_bigint::{BigInt, BigUint};
-use num_bigint_dig::algorithms::jacobi;
-use num_bigint_dig::RandBigInt;
 use num_integer::Integer;
 use num_traits::FromPrimitive;
 use num_traits::One;

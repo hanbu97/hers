@@ -10,8 +10,6 @@ use super::*;
 use ::rand::{rngs::StdRng, SeedableRng};
 use num_bigint::Sign;
 
-// use num_bigint_dig::RandBigInt;
-
 /// Reports whether n passes the "almost extra strong" Lucas probable prime test,
 /// using Baillie-OEIS parameter selection. This corresponds to "AESLPSP" on Jacobsen's tables (link below).
 /// The combination of this test and a Miller-Rabin/Fermat test with base 2 gives a Baillie-PSW test.
