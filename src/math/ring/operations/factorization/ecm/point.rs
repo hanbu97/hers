@@ -1,84 +1,118 @@
-use num_bigint::BigUint;
-use num_traits::{One, Zero};
+use rug::Integer;
 
-#[derive(Debug, Clone)]
-pub struct CurveParams {
-    pub a_24: BigUint,
-    pub modulus: BigUint,
-}
-
-#[derive(Debug, Clone, PartialEq)]
+/// Montgomery form of Points in an elliptic curve.
+///
+/// In this form, the addition and doubling of points
+/// does not need any y-coordinate information thus
+/// decreasing the number of operations.
+/// Using Montgomery form we try to perform point addition
+/// and doubling in least amount of multiplications.
+///
+/// The elliptic curve used here is of the form
+/// `(E : b*y**2*z = x**3 + a*x**2*z + x*z**2)`.
+/// The `a_24` parameter is equal to `(a + 2)/4`.
+///
+/// References
+/// ----------
+/// - http://www.hyperelliptic.org/tanja/SHARCS/talks06/Gaj.pdf
+#[derive(Debug, Clone, Default)]
 pub struct Point {
-    pub x_cord: BigUint,
-    pub z_cord: BigUint,
+    /// X coordinate of the Point
+    pub x_cord: Integer,
+    /// Z coordinate of the Point
+    pub z_cord: Integer,
+    /// Parameter of the elliptic curve in Montgomery form
+    pub a_24: Integer,
+    /// modulus
+    pub modulus: Integer,
 }
 
 impl Point {
-    pub fn new(x_cord: BigUint, z_cord: BigUint) -> Point {
-        Point { x_cord, z_cord }
+    /// Initial parameters for the Point struct.
+    ///
+    /// # Parameters
+    ///
+    /// - `x_cord`: X coordinate of the Point
+    /// - `z_cord`: Z coordinate of the Point
+    /// - `a_24`: Parameter of the elliptic curve in Montgomery form
+    /// - `mod`: modulus
+    pub fn new(x_cord: Integer, z_cord: Integer, a_24: Integer, modulus: Integer) -> Point {
+        Point {
+            x_cord,
+            z_cord,
+            a_24,
+            modulus,
+        }
     }
 
-    pub fn add(&self, q: &Point, diff: &Point, params: &CurveParams) -> Point {
-        let u = (&self.x_cord + &params.modulus - &self.z_cord) * (&q.x_cord + &q.z_cord)
-            % &params.modulus;
-        let v = (&self.x_cord + &self.z_cord) * (&q.x_cord + &params.modulus - &q.z_cord)
-            % &params.modulus;
-        let add = (&u + &v) % &params.modulus;
-        let subt = (&u + &params.modulus - &v) % &params.modulus;
-        let x_cord = (&diff.z_cord * &add * &add) % &params.modulus;
-        let z_cord = (&diff.x_cord * &subt * &subt) % &params.modulus;
+    /// Adds two points `self` and `Q` where `diff = self - Q`.
+    ///
+    /// This algorithm requires 6 multiplications. The assumption is that `self.x_cord * Q.x_cord * (self.x_cord - Q.x_cord) != 0`.
+    /// Using this algorithm speeds up the addition by reducing the number of multiplications required.
+    ///
+    /// The `mont_ladder` algorithm is constructed in a way that the difference between intermediate points is always equal to the initial point.
+    /// So, we always know what the difference between the point is.
+    ///
+    /// # Parameters
+    ///
+    /// - `Q`: Point on the curve in Montgomery form.
+    /// - `diff`: `self - Q`
+    pub fn add(&self, q: &Point, diff: &Point) -> Point {
+        let u = Integer::from(&self.x_cord - &self.z_cord) * Integer::from(&q.x_cord + &q.z_cord);
+        let v = Integer::from(&self.x_cord + &self.z_cord) * Integer::from(&q.x_cord - &q.z_cord);
+        let add = Integer::from(&u + &v);
+        let subt = u - v;
+        let x_cord = Integer::from(&diff.z_cord * &add) * &add % &self.modulus;
+        let z_cord = Integer::from(&diff.x_cord * &subt) * &subt % &self.modulus;
 
-        Point::new(x_cord, z_cord)
+        Point::new(x_cord, z_cord, self.a_24.clone(), self.modulus.clone())
     }
 
-    pub fn double(&self, params: &CurveParams) -> Point {
-        let u = (&self.x_cord + &self.z_cord).modpow(&BigUint::from(2u32), &params.modulus);
-        let v = (&self.x_cord + &params.modulus - &self.z_cord)
-            .modpow(&BigUint::from(2u32), &params.modulus);
-        let diff = (&u + &params.modulus - &v) % &params.modulus;
-        let x_cord = (&u * &v) % &params.modulus;
-        let z_cord = (&v + &params.a_24 * &diff) * &diff % &params.modulus;
+    /// Doubles a point in an elliptic curve in Montgomery form.
+    pub fn double(&self) -> Point {
+        let u = Integer::from(&self.x_cord + &self.z_cord).square();
+        let v = Integer::from(&self.x_cord - &self.z_cord).square();
+        let diff = Integer::from(&u - &v);
+        let x_cord = (u * &v) % &self.modulus;
+        let z_cord = ((v + &self.a_24 * &diff) * diff) % &self.modulus;
 
-        Point::new(x_cord, z_cord)
+        Point::new(x_cord, z_cord, self.a_24.clone(), self.modulus.clone())
     }
 
-    pub fn mont_ladder(&self, k: &BigUint, params: &CurveParams) -> Point {
+    /// Scalar multiplication of a point in Montgomery form
+    /// using Montgomery Ladder Algorithm.
+    /// A total of 11 multiplications are required in each step of this
+    /// algorithm.
+    ///
+    /// # Parameters
+    ///
+    /// - `k`: The positive integer multiplier
+    pub fn mont_ladder(&self, k: &Integer) -> Point {
         let mut q = self.clone();
-        let mut r = self.double(params);
+        let mut r = self.double();
 
         for i in format!("{:b}", k)[1..].chars() {
             if i == '1' {
-                q = r.add(&q, self, params);
-                r = r.double(params);
+                q = r.add(&q, self);
+                r = r.double();
             } else {
-                r = q.add(&r, self, params);
-                q = q.double(params);
+                r = q.add(&r, self);
+                q = q.double();
             }
         }
         q
     }
+}
 
-    pub fn eq(&self, other: &Self, params: &CurveParams) -> bool {
-        let self_inv = Self::mod_inverse(&self.z_cord, &params.modulus).unwrap();
-        let other_inv = Self::mod_inverse(&other.z_cord, &params.modulus).unwrap();
-        (&self_inv * &self.x_cord) % &params.modulus
-            == (&other_inv * &other.x_cord) % &params.modulus
-    }
-
-    pub fn mod_inverse(a: &BigUint, m: &BigUint) -> Option<BigUint> {
-        let (mut t, mut newt) = (BigUint::zero(), BigUint::one());
-        let (mut r, mut newr) = (m.clone(), a.clone());
-
-        while !newr.is_zero() {
-            let quotient = &r / &newr;
-            (t, newt) = (newt.clone(), t + m - (&quotient * &newt) % m);
-            (r, newr) = (newr.clone(), r - quotient * newr);
-        }
-
-        if r > BigUint::one() {
-            None
+impl PartialEq for Point {
+    /// Two points are equal if X/Z of both points are equal.
+    fn eq(&self, other: &Self) -> bool {
+        if self.a_24 != other.a_24 || self.modulus != other.modulus {
+            false
         } else {
-            Some(t % m)
+            self.z_cord.clone().invert(&self.modulus).unwrap() * &self.x_cord % &self.modulus
+                == other.z_cord.clone().invert(&self.modulus).unwrap() * &other.x_cord
+                    % &self.modulus
         }
     }
 }
@@ -86,135 +120,107 @@ impl Point {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use num_bigint::ToBigUint;
-
-    fn create_test_params() -> CurveParams {
-        CurveParams {
-            a_24: 7.to_biguint().unwrap(),
-            modulus: 29.to_biguint().unwrap(),
-        }
-    }
+    use rug::Integer;
 
     #[test]
     fn test_point_add() {
-        let params = create_test_params();
-        let p1 = Point::new(11.to_biguint().unwrap(), 16.to_biguint().unwrap());
-        let p2 = Point::new(13.to_biguint().unwrap(), 10.to_biguint().unwrap());
-        let p3 = p2.add(&p1, &p1, &params);
+        let p1 = Point::new(11.into(), 16.into(), 7.into(), 29.into());
+        let p2 = Point::new(13.into(), 10.into(), 7.into(), 29.into());
+        let p3 = p2.add(&p1, &p1);
 
-        assert_eq!(p3.x_cord, 23.to_biguint().unwrap());
-        assert_eq!(p3.z_cord, 17.to_biguint().unwrap());
+        assert_eq!(p3.x_cord, Integer::from(23));
+        assert_eq!(p3.z_cord, Integer::from(17));
     }
 
     #[test]
     fn test_point_double() {
-        let params = create_test_params();
-        let p1 = Point::new(11.to_biguint().unwrap(), 16.to_biguint().unwrap());
-        let p2 = p1.double(&params);
+        let p1 = Point::new(11.into(), 16.into(), 7.into(), 29.into());
+        let p2 = p1.double();
 
-        assert_eq!(p2.x_cord, 13.to_biguint().unwrap());
-        assert_eq!(p2.z_cord, 10.to_biguint().unwrap());
+        assert_eq!(p2.x_cord, Integer::from(13));
+        assert_eq!(p2.z_cord, Integer::from(10));
     }
 
     #[test]
     fn test_point_mont_ladder() {
-        let params = create_test_params();
-        let p1 = Point::new(11.to_biguint().unwrap(), 16.to_biguint().unwrap());
-        let p3 = p1.mont_ladder(&3.to_biguint().unwrap(), &params);
+        let p1 = Point::new(11.into(), 16.into(), 7.into(), 29.into());
+        let p3 = p1.mont_ladder(&3.into());
 
-        assert_eq!(p3.x_cord, 23.to_biguint().unwrap());
-        assert_eq!(p3.z_cord, 17.to_biguint().unwrap());
+        assert_eq!(p3.x_cord, Integer::from(23));
+        assert_eq!(p3.z_cord, Integer::from(17));
     }
 
     #[test]
     fn test_point() {
-        let modulus = 101.to_biguint().unwrap();
-        let a: BigUint = 10.to_biguint().unwrap();
-        let a_24: BigUint = (&a + 2.to_biguint().unwrap())
-            * Point::mod_inverse(&4.to_biguint().unwrap(), &modulus).unwrap()
-            % &modulus;
+        let modulus = 101.into();
+        let a: Integer = 10.into();
+        let a_24: Integer = (a + Integer::from(2)) * Integer::from(4).invert(&modulus).unwrap();
 
-        let params = CurveParams {
-            a_24,
-            modulus: modulus.clone(),
-        };
-
-        let p1 = Point::new(10.to_biguint().unwrap(), 17.to_biguint().unwrap());
-        let p2 = p1.double(&params);
-        assert!(p2.eq(
-            &Point::new(68.to_biguint().unwrap(), 56.to_biguint().unwrap()),
-            &params
-        ));
-
-        let p4 = p2.double(&params);
-        assert!(p4.eq(
-            &Point::new(22.to_biguint().unwrap(), 64.to_biguint().unwrap()),
-            &params
-        ));
-
-        let p8 = p4.double(&params);
-        assert!(p8.eq(
-            &Point::new(71.to_biguint().unwrap(), 95.to_biguint().unwrap()),
-            &params
-        ));
-
-        let p16 = p8.double(&params);
-        assert!(p16.eq(
-            &Point::new(5.to_biguint().unwrap(), 16.to_biguint().unwrap()),
-            &params
-        ));
-
-        let p32 = p16.double(&params);
-        assert!(p32.eq(
-            &Point::new(33.to_biguint().unwrap(), 96.to_biguint().unwrap()),
-            &params
-        ));
+        let p1 = Point::new(10.into(), 17.into(), a_24.clone(), modulus.clone());
+        let p2 = p1.double();
+        assert_eq!(
+            p2,
+            Point::new(68.into(), 56.into(), a_24.clone(), modulus.clone())
+        );
+        let p4 = p2.double();
+        assert_eq!(
+            p4,
+            Point::new(22.into(), 64.into(), a_24.clone(), modulus.clone())
+        );
+        let p8 = p4.double();
+        assert_eq!(
+            p8,
+            Point::new(71.into(), 95.into(), a_24.clone(), modulus.clone())
+        );
+        let p16 = p8.double();
+        assert_eq!(
+            p16,
+            Point::new(5.into(), 16.into(), a_24.clone(), modulus.clone())
+        );
+        let p32 = p16.double();
+        assert_eq!(
+            p32,
+            Point::new(33.into(), 96.into(), a_24.clone(), modulus.clone())
+        );
 
         // p3 = p2 + p1
-        let p3 = p2.add(&p1, &p1, &params);
-        assert!(p3.eq(
-            &Point::new(1.to_biguint().unwrap(), 61.to_biguint().unwrap()),
-            &params
-        ));
-
+        let p3 = p2.add(&p1, &p1);
+        assert_eq!(
+            p3,
+            Point::new(1.into(), 61.into(), a_24.clone(), modulus.clone())
+        );
         // p5 = p3 + p2 or p4 + p1
-        let p5 = p3.add(&p2, &p1, &params);
-        assert!(p5.eq(
-            &Point::new(49.to_biguint().unwrap(), 90.to_biguint().unwrap()),
-            &params
-        ));
-        assert!(p5.eq(&p4.add(&p1, &p3, &params), &params));
+        let p5 = p3.add(&p2, &p1);
+        assert_eq!(
+            p5,
+            Point::new(49.into(), 90.into(), a_24.clone(), modulus.clone())
+        );
+        assert_eq!(p5, p4.add(&p1, &p3));
+        // # p6 = 2*p3
+        let p6 = p3.double();
+        assert_eq!(
+            p6,
+            Point::new(87.into(), 43.into(), a_24.clone(), modulus.clone())
+        );
+        assert_eq!(p6, p4.add(&p2, &p2));
+        // # p7 = p5 + p2
+        let p7 = p5.add(&p2, &p3);
+        assert_eq!(
+            p7,
+            Point::new(69.into(), 23.into(), a_24.clone(), modulus.clone())
+        );
+        assert_eq!(p7, p4.add(&p3, &p1));
+        assert_eq!(p7, p6.add(&p1, &p5));
+        // # p9 = p5 + p4
+        let p9 = p5.add(&p4, &p1);
+        assert_eq!(p9, Point::new(56.into(), 99.into(), a_24, modulus));
+        assert_eq!(p9, p6.add(&p3, &p3));
+        assert_eq!(p9, p7.add(&p2, &p5));
+        assert_eq!(p9, p8.add(&p1, &p7));
 
-        // p6 = 2*p3
-        let p6 = p3.double(&params);
-        assert!(p6.eq(
-            &Point::new(87.to_biguint().unwrap(), 43.to_biguint().unwrap()),
-            &params
-        ));
-        assert!(p6.eq(&p4.add(&p2, &p2, &params), &params));
-
-        // p7 = p5 + p2
-        let p7 = p5.add(&p2, &p3, &params);
-        assert!(p7.eq(
-            &Point::new(69.to_biguint().unwrap(), 23.to_biguint().unwrap()),
-            &params
-        ));
-        assert!(p7.eq(&p4.add(&p3, &p1, &params), &params));
-        assert!(p7.eq(&p6.add(&p1, &p5, &params), &params));
-
-        // p9 = p5 + p4
-        let p9 = p5.add(&p4, &p1, &params);
-        assert!(p9.eq(
-            &Point::new(56.to_biguint().unwrap(), 99.to_biguint().unwrap()),
-            &params
-        ));
-        assert!(p9.eq(&p6.add(&p3, &p3, &params), &params));
-        assert!(p9.eq(&p7.add(&p2, &p5, &params), &params));
-        assert!(p9.eq(&p8.add(&p1, &p7, &params), &params));
-
-        assert!(p5.eq(&p1.mont_ladder(&5.to_biguint().unwrap(), &params), &params));
-        assert!(p9.eq(&p1.mont_ladder(&9.to_biguint().unwrap(), &params), &params));
-        assert!(p16.eq(&p1.mont_ladder(&16.to_biguint().unwrap(), &params), &params));
-        assert!(p9.eq(&p3.mont_ladder(&3.to_biguint().unwrap(), &params), &params));
+        assert_eq!(p5, p1.mont_ladder(&5.into()));
+        assert_eq!(p9, p1.mont_ladder(&9.into()));
+        assert_eq!(p16, p1.mont_ladder(&16.into()));
+        assert_eq!(p9, p3.mont_ladder(&3.into()));
     }
 }
