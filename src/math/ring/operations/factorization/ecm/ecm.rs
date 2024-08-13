@@ -4,7 +4,7 @@ use super::errors::ECMErrors;
 use super::point::Point;
 
 use primal::Primes;
-use rug::{integer::IsPrime, rand::RandState, Integer};
+use rug::{rand::RandState, Integer};
 use std::collections::HashMap;
 
 /// Returns one factor of n using Lenstra's 2 Stage Elliptic curve Factorization

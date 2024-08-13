@@ -1,5 +1,7 @@
-use super::*;
 use num_traits::WrappingMul;
+
+use super::*;
+// use num_traits::WrappingMul;
 use std::num::Wrapping;
 
 /// Computes the constant m_red_constant = (q^-1) mod 2^64 required for MRed.

@@ -1,13 +1,10 @@
 use super::*;
 
-use num_bigint::BigUint;
-use num_traits::ToPrimitive;
-
 /// Computes the constant for the BRed algorithm.
 /// Returns [((2^128)/q)/(2^64), (2^128)/q mod 2^64].
 #[inline(always)]
 pub fn compute_barrett_constants(q: u64) -> [u64; 2] {
-    let barrett = ((BigUint::from(1u64) << 128usize) / BigUint::from(q))
+    let barrett = ((Integer::from(1u64) << 128usize) / Integer::from(q))
         .to_u128()
         .unwrap();
 
