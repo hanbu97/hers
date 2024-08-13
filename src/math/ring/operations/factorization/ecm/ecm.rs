@@ -1,3 +1,5 @@
+use crate::utils::prime::PrimeChecking;
+
 use super::errors::ECMErrors;
 use super::point::Point;
 
@@ -45,7 +47,7 @@ pub fn ecm_one_factor(
         return Err(ECMErrors::BoundsNotEven);
     }
 
-    if n.is_probably_prime(1000) != IsPrime::No {
+    if n.is_prime() {
         return Err(ECMErrors::NumberIsPrime);
     }
 
