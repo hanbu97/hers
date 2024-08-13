@@ -1,5 +1,4 @@
 use num_bigint::BigUint;
-use num_integer::Integer;
 use num_traits::{One, Zero};
 
 #[derive(Debug, Clone)]
@@ -66,7 +65,7 @@ impl Point {
             == (&other_inv * &other.x_cord) % &params.modulus
     }
 
-    fn mod_inverse(a: &BigUint, m: &BigUint) -> Option<BigUint> {
+    pub fn mod_inverse(a: &BigUint, m: &BigUint) -> Option<BigUint> {
         let (mut t, mut newt) = (BigUint::zero(), BigUint::one());
         let (mut r, mut newr) = (m.clone(), a.clone());
 

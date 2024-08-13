@@ -1,97 +1,16 @@
 // ref: https://github.com/skyf0l/ecm-rs/blob/main/src/ecm.rs
 
+pub mod ecm;
 pub mod point;
 // pub mod point_int;
 
 use num_bigint::{BigUint, ToBigUint};
 use num_integer::Integer as _;
-use num_traits::{One, Zero};
+use num_traits::One;
 
 use crate::utils::{num_bigint_ext::rand::RandBigInt, prime::PrimeChecking};
 
-#[derive(Clone, Debug)]
-struct Point {
-    x: BigUint,
-    z: BigUint,
-}
-
-impl Point {
-    fn new(x: BigUint, z: BigUint) -> Self {
-        Point { x, z }
-    }
-}
-
-/// Modular exponentiation: (base^exponent) % modulus
-fn mod_pow(base: &BigUint, exponent: &BigUint, modulus: &BigUint) -> BigUint {
-    let mut result = BigUint::one();
-    let mut base = base.clone();
-    let mut exp = exponent.clone();
-
-    while !exp.is_zero() {
-        if exp.is_odd() {
-            result = (result * &base) % modulus;
-        }
-        exp >>= 1;
-        base = (&base * &base) % modulus;
-    }
-    result
-}
-
-/// Modular inverse: returns a such that (a * n) % modulus == 1
-fn mod_inverse(n: &BigUint, modulus: &BigUint) -> Option<BigUint> {
-    let (mut t, mut newt) = (BigUint::zero(), BigUint::one());
-    let (mut r, mut newr) = (modulus.clone(), n.clone());
-
-    while !newr.is_zero() {
-        let quotient = &r / &newr;
-        (t, newt) = (newt.clone(), t - quotient.clone() * newt);
-        (r, newr) = (newr.clone(), r - quotient * newr);
-    }
-
-    if r > BigUint::one() {
-        None
-    } else if t < BigUint::zero() {
-        Some(t + modulus)
-    } else {
-        Some(t)
-    }
-}
-
-/// Addition of points on the elliptic curve
-fn add_points(p: &Point, q: &Point, diff: &Point, a24: &BigUint, n: &BigUint) -> Point {
-    let u = (&p.x - &p.z) * (&q.x + &q.z) % n;
-    let v = (&p.x + &p.z) * (&q.x - &q.z) % n;
-    let x = (&diff.z * (&u + &v).pow(2u32)) % n;
-    let z = (&diff.x * (&u - &v).pow(2u32)) % n;
-    Point::new(x, z)
-}
-
-/// Doubling a point on the elliptic curve
-fn double_point(p: &Point, a24: &BigUint, n: &BigUint) -> Point {
-    let u = (&p.x + &p.z).pow(2u32) % n;
-    let v = (&p.x - &p.z).pow(2u32) % n;
-    let x = (&u * &v) % n;
-    let t = u - &v;
-    let z = (t.clone() * (a24 * &t + &v)) % n;
-    Point::new(x, z)
-}
-
-/// Montgomery ladder for scalar multiplication
-fn montgomery_ladder(k: &BigUint, base: &Point, a24: &BigUint, n: &BigUint) -> Point {
-    let mut r0 = base.clone();
-    let mut r1 = double_point(base, a24, n);
-
-    for i in (0..k.bits()).rev() {
-        if k.bit(i) {
-            r0 = add_points(&r0, &r1, base, a24, n);
-            r1 = double_point(&r1, a24, n);
-        } else {
-            r1 = add_points(&r0, &r1, base, a24, n);
-            r0 = double_point(&r0, a24, n);
-        }
-    }
-    r0
-}
+use self::point::{CurveParams, Point};
 
 /// Elliptic Curve Method (ECM) for factorization.
 /// This function attempts to find a single factor of the input number.
@@ -113,16 +32,21 @@ pub fn get_factor_ecm(n: &BigUint) -> BigUint {
         let u = (&sigma * &sigma - &five) % n;
         let v = (&four * &sigma) % n;
 
-        let x = mod_pow(&u, &three, n) % n;
-        let z = mod_pow(&v, &three, n) % n;
+        let x = u.modpow(&three, n);
+        let z = v.modpow(&three, n);
 
         let w = (&v - &u) % n;
         let a = ((&w * &w * &w * (&u + &u + &u + &v)) % n
-            * mod_inverse(&(&four * &x * &v), n).unwrap()
+            * Point::mod_inverse(&(&four * &x * &v), n).unwrap()
             - &two)
             % n;
 
-        let a24 = (&a + &two) * mod_inverse(&four, n).unwrap() % n;
+        let a24 = (&a + &two) * Point::mod_inverse(&four, n).unwrap() % n;
+
+        let params = CurveParams {
+            a_24: a24,
+            modulus: n.clone(),
+        };
 
         let mut point = Point::new(x, z);
 
@@ -131,13 +55,13 @@ pub fn get_factor_ecm(n: &BigUint) -> BigUint {
             if p.is_prime() {
                 let mut q = p;
                 while q <= b1 {
-                    point = montgomery_ladder(&q.to_biguint().unwrap(), &point, &a24, n);
+                    point = point.mont_ladder(&q.to_biguint().unwrap(), &params);
                     q *= p;
                 }
             }
         }
 
-        let mut g = point.z.gcd(n);
+        let mut g = point.z_cord.gcd(n);
         if g > BigUint::one() && &g < n {
             return g;
         }
@@ -145,8 +69,8 @@ pub fn get_factor_ecm(n: &BigUint) -> BigUint {
         // Stage 2 (simplified)
         for q in (b1 + 1)..=b2 {
             if q.is_prime() {
-                point = montgomery_ladder(&q.to_biguint().unwrap(), &point, &a24, n);
-                g = point.z.gcd(n);
+                point = point.mont_ladder(&q.to_biguint().unwrap(), &params);
+                g = point.z_cord.gcd(n);
                 if g > BigUint::one() && &g < n {
                     return g;
                 }
@@ -155,4 +79,86 @@ pub fn get_factor_ecm(n: &BigUint) -> BigUint {
     }
 
     n.clone() // Factor not found
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use num_bigint::{BigUint, ToBigUint};
+    use num_traits::ToPrimitive;
+    use num_traits::Zero;
+
+    fn check_factor(n: &BigUint, factor: &BigUint) {
+        assert!(n % factor == BigUint::zero());
+        assert_ne!(factor, &BigUint::one());
+        assert_ne!(factor, n);
+    }
+
+    #[test]
+    fn test_small_composite() {
+        let n = BigUint::from(1829u32);
+        let factor = get_factor_ecm(&n);
+        check_factor(&n, &factor);
+    }
+
+    #[test]
+    fn test_medium_composite() {
+        let n = BigUint::from(398883434337287u64);
+        let factor = get_factor_ecm(&n);
+        check_factor(&n, &factor);
+    }
+
+    #[test]
+    fn test_large_composite() {
+        let n: BigUint = "168541512131094651323".parse().unwrap();
+        let factor = get_factor_ecm(&n);
+
+        check_factor(&n, &factor);
+    }
+
+    #[test]
+    fn test_very_large_composite() {
+        let n: BigUint = "4269021180054189416198169786894227".parse().unwrap();
+        let factor = get_factor_ecm(&n);
+
+        check_factor(&n, &factor);
+    }
+
+    #[test]
+    fn test_small_prime() {
+        let n = BigUint::from(17u32);
+        let factor = get_factor_ecm(&n);
+        assert_eq!(factor, n);
+    }
+
+    #[test]
+    fn test_large_prime() {
+        let n: BigUint = "21472883178031195225853317139".parse().unwrap();
+        let factor = get_factor_ecm(&n);
+        assert_eq!(factor, n);
+    }
+
+    #[test]
+    fn test_power_of_prime() {
+        let n = BigUint::from(2u32).pow(16); // 65536
+        let factor = get_factor_ecm(&n);
+        assert_eq!(factor, BigUint::from(2u32));
+    }
+
+    #[test]
+    fn test_product_of_primes() {
+        let n =
+            BigUint::from(2u32) * BigUint::from(3u32) * BigUint::from(5u32) * BigUint::from(7u32);
+        let factor = get_factor_ecm(&n);
+        check_factor(&n, &factor);
+        assert!(vec![2u32, 3u32, 5u32, 7u32].contains(&factor.to_u32().unwrap()));
+    }
+
+    #[test]
+    fn test_same_factors() {
+        let n: BigUint = "7853316850129".parse().unwrap(); // 2802377 * 2802377
+        let factor = get_factor_ecm(&n);
+        check_factor(&n, &factor);
+        assert_eq!(factor, BigUint::from(2802377u32));
+    }
 }
