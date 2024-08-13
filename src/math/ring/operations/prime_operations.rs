@@ -1,5 +1,37 @@
-use super::mod_exp;
+use rug::Integer;
+
+use super::{factorization::get_factors, mod_exp};
 use crate::{math::ring::errors::MathError, utils::prime::PrimeChecking};
+
+/// Computes the smallest primitive root of the given prime q.
+/// The unique factors of q-1 can be given to speed up the search for the root.
+pub fn primitive_root(q: u64, factors: Option<Vec<u64>>) -> anyhow::Result<(u64, Vec<u64>)> {
+    let factors = match factors {
+        Some(f) => {
+            check_factors(q - 1, &f)?;
+            f
+        }
+        None => {
+            let factors_big = get_factors(&Integer::from(q - 1))?;
+            factors_big.iter().map(|f| f.to_u64().unwrap()).collect()
+        }
+    };
+
+    let mut g = 2u64; // g = 3 ?
+    loop {
+        let mut is_primitive_root = true;
+        for &factor in &factors {
+            if mod_exp(g, (q - 1) / factor, q) == 1 {
+                is_primitive_root = false;
+                break;
+            }
+        }
+        if is_primitive_root {
+            return Ok((g, factors));
+        }
+        g += 1;
+    }
+}
 
 /// Checks that the given list of factors contains all the unique primes of m.
 pub fn check_factors(m: u64, factors: &[u64]) -> Result<(), MathError> {
