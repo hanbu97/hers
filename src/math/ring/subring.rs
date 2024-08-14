@@ -1,10 +1,23 @@
-use super::{errors::SubRingError, operations::vec_operations::*};
-use crate::math::{
-    ntt::{params::NTTTable, traits::NumberTheoreticTransform, NTTImplementations},
-    ring::{
-        constants::MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
-        reduction::{barrett::compute_barrett_constants, montgomery::compute_montgomery_constant},
+use super::{
+    errors::SubRingError,
+    operations::{
+        mod_exp,
+        prime_operations::{check_primitive_root, primitive_root},
+        vec_operations::*,
     },
+    reduction::montgomery::{m_form, m_red},
+};
+use crate::{
+    math::{
+        ntt::{params::NTTTable, traits::NumberTheoreticTransform, NTTImplementations},
+        ring::{
+            constants::MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
+            reduction::{
+                barrett::compute_barrett_constants, montgomery::compute_montgomery_constant,
+            },
+        },
+    },
+    utils::prime::PrimeChecking,
 };
 
 fn calculate_mask(modulus: u64) -> u64 {
@@ -408,5 +421,110 @@ impl SubRing {
     #[inline(always)]
     pub fn intt_lazy(&self, p1: &[u64], p2: &mut [u64]) {
         self.ntt.backward_lazy(p1, p2);
+    }
+
+    /// Generates the NTT constants for the target SubRing.
+    ///
+    /// This function computes various Number Theoretic Transform (NTT) related constants
+    /// that are essential for efficient polynomial operations in the ring.
+    ///
+    /// # Note
+    ///
+    /// The fields `primitive_root` and `factors` can be set manually before calling this function
+    /// to bypass the search for the primitive root. This can significantly speed up the generation
+    /// of constants, as finding a primitive root requires factoring `modulus - 1`, which can be
+    /// computationally expensive for large moduli.
+    ///
+    /// # Errors
+    ///
+    /// This function will return an error if:
+    /// - The degree or modulus is invalid (e.g., zero)
+    /// - The modulus is not prime
+    /// - The modulus is not congruent to 1 modulo `nth_root`
+    /// - A valid primitive root cannot be found or verified
+    pub fn compute_ntt_constants(&mut self) -> anyhow::Result<()> {
+        if self.degree == 0 || self.modulus == 0 {
+            return Err(SubRingError::InvalidNTTParams.into());
+        }
+
+        let modulus = self.modulus;
+        let nth_root = self.ntt_table.nth_root;
+
+        // Check modulus is a prime number
+        if !modulus.is_prime() {
+            return Err(SubRingError::InvalidModulus(modulus).into());
+        }
+
+        // Check if modulus is congruent to 1 modulo nth_root
+        if modulus & (nth_root - 1) != 1 {
+            return Err(SubRingError::InvalidNthRootOfUnity(nth_root).into());
+        }
+
+        // Find primitive root if not already set
+        if self.ntt_table.primitive_root == 0 || self.factors.is_empty() {
+            let (primitive_root, factors) = primitive_root(modulus, None)?;
+            self.ntt_table.primitive_root = primitive_root;
+            self.factors = factors;
+        } else {
+            // Check if the provided primitive root is valid
+            check_primitive_root(self.ntt_table.primitive_root, modulus, &self.factors)?;
+        }
+
+        let log_nth_root = 63 - (nth_root >> 1).leading_zeros();
+
+        // 1.1 Compute N^(-1) mod Q in Montgomery form
+        self.ntt_table.n_inv = m_form(
+            mod_exp(nth_root >> 1, modulus - 2, modulus),
+            modulus,
+            self.b_red_constant,
+        );
+
+        // 1.2 Computes Psi and PsiInv in Montgomery form
+        // Compute Psi and PsiInv in Montgomery form
+        let psi_mont = m_form(
+            mod_exp(
+                self.ntt_table.primitive_root,
+                (modulus - 1) / nth_root,
+                modulus,
+            ),
+            modulus,
+            self.b_red_constant,
+        );
+        let psi_inv_mont = m_form(
+            mod_exp(
+                self.ntt_table.primitive_root,
+                modulus - ((modulus - 1) / nth_root) - 1,
+                modulus,
+            ),
+            modulus,
+            self.b_red_constant,
+        );
+
+        self.ntt_table.roots_forward = vec![0; nth_root as usize >> 1];
+        self.ntt_table.roots_backward = vec![0; nth_root as usize >> 1];
+
+        self.ntt_table.roots_forward[0] = m_form(1, modulus, self.b_red_constant);
+        self.ntt_table.roots_backward[0] = m_form(1, modulus, self.b_red_constant);
+
+        // Compute roots_forward[j] = roots_forward[j-1]*Psi and roots_backward[j] = roots_backward[j-1]*PsiInv
+        for j in 1..(nth_root >> 1) {
+            let index_reverse_prev = j.wrapping_sub(1).reverse_bits() >> (64 - log_nth_root);
+            let index_reverse_next = j.reverse_bits() >> (64 - log_nth_root);
+
+            self.ntt_table.roots_forward[index_reverse_next as usize] = m_red(
+                self.ntt_table.roots_forward[index_reverse_prev as usize],
+                psi_mont,
+                modulus,
+                self.m_red_constant,
+            );
+            self.ntt_table.roots_backward[index_reverse_next as usize] = m_red(
+                self.ntt_table.roots_backward[index_reverse_prev as usize],
+                psi_inv_mont,
+                modulus,
+                self.m_red_constant,
+            );
+        }
+
+        Ok(())
     }
 }

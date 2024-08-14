@@ -5,6 +5,12 @@ pub enum SubRingError {
     #[error("Invalid ring degree: must be a power of 2 greater than {0}")]
     InvalidRingDegree(u64),
 
+    #[error("Invalid modulus: must be a prime number {0}")]
+    InvalidModulus(u64),
+
+    #[error("Invalid nth root of unity: must be a primitive root of unity {0}")]
+    InvalidNthRootOfUnity(u64),
+
     #[error("Invalid modulus for Montgomery reduction: must not be a power of 2 or 0")]
     InvalidModulusForMontgomery,
 
@@ -12,6 +18,9 @@ pub enum SubRingError {
     NTTCreationFailed,
     #[error("Computation error: {0}")]
     ComputationError(String),
+
+    #[error("Invalid NTT parameters")]
+    InvalidNTTParams,
 }
 
 #[derive(Error, Debug)]
