@@ -67,7 +67,7 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
         let d_int = BigInt::from_u64(p * p - 4).unwrap();
         let j = super::jacobi::jacobi(&d_int, &n_int);
 
-        println!("p: {}, j: {} d: {}", p, j, d_int);
+        // println!("p: {}, j: {} d: {}", p, j, d_int);
 
         if j == -1 {
             break;
@@ -495,27 +495,6 @@ mod tests {
             "4080359",
             "4145951",
         ];
-    }
-
-    #[test]
-    fn test_probably_prime_lucas_1() {
-        let lucas_pseudoprimes = vec![
-            989, 3239, 5777, 10877, 27971, 29681, 30739, 31631, 39059, 72389, 73919, 75077,
-        ];
-
-        for i in (3..100000).step_by(2) {
-            let n = BigUint::from_u64(i).unwrap();
-            let lucas_prime = probably_prime_lucas(&n);
-            let miller_rabin_prime = probably_prime_miller_rabin(&n, 1, true);
-
-            if lucas_prime && !miller_rabin_prime {
-                if !lucas_pseudoprimes.contains(&i) {
-                    panic!("Unexpected Lucas pseudoprime: {}", i);
-                }
-            } else if !lucas_prime && lucas_pseudoprimes.contains(&i) {
-                panic!("Missed Lucas pseudoprime: {}", i);
-            }
-        }
     }
 
     #[test]

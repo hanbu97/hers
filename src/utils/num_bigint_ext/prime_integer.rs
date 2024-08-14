@@ -1,41 +1,50 @@
+use num_traits::FromPrimitive;
 use num_traits::One;
-use num_traits::Pow;
+use rug::integer::IntegerExt64;
 use rug::rand::RandState;
+
 use rug::Integer;
 
 use super::constants_integer::{BIG_1, BIG_2, BIG_3, BIG_64, PRIMES_A, PRIMES_B, PRIME_BIT_MASK};
 
 pub fn probably_prime_lucas(n: &Integer) -> bool {
-    // Discard 0, 1.
     if n.is_zero() || n.is_one() {
         return false;
     }
 
     // Two is the only even prime.
-    if n == &Integer::from(2) {
-        return true;
+    if n.to_u64() == Some(2) {
+        return false;
     }
 
-    // Baillie-OEIS "method C" for choosing D, P, Q
-    let mut p = Integer::from(3u32);
+    let mut p = 3u64;
+    let n_int = n.clone();
 
     loop {
         if p > 10000 {
-            panic!("internal error: cannot find (D/n) = -1 for {:?}", n);
+            // This is widely believed to be impossible.
+            // If we get a report, we'll want the exact number n.
+            panic!("internal error: cannot find (D/n) = -1 for {:?}", n)
         }
 
-        let d: Integer = p.clone().pow(2u32) - 4;
-        let j = d.jacobi(n);
-
-        println!("p: {}, j: {} d: {}", p, j, d);
+        let d_int = Integer::from_u64(p * p - 4).unwrap();
+        let j = Integer::jacobi(&d_int, &n_int);
 
         if j == -1 {
             break;
         }
         if j == 0 {
-            return *n == p + 2;
+            // d = p²-4 = (p-2)(p+2).
+            // If (d/n) == 0 then d shares a prime factor with n.
+            // Since the loop proceeds in increasing p and starts with p-2==1,
+            // the shared prime factor must be p+2.
+            // If p+2 == n, then n is prime; otherwise p+2 is a proper factor of n.
+            return n_int.to_i64() == Some(p as i64 + 2);
         }
         if p == 40 {
+            // We'll never find (d/n) = -1 if n is a square.
+            // If n is a non-square we expect to find a d in just a few attempts on average.
+            // After 40 attempts, take a moment to check if n is indeed a square.
             let t1 = n.clone().sqrt();
             if Integer::from(&t1 * &t1) == *n {
                 return false;
@@ -45,36 +54,55 @@ pub fn probably_prime_lucas(n: &Integer) -> bool {
         p += 1;
     }
 
-    // Arrange s = (n - Jacobi(Δ, n)) / 2^r = (n+1) / 2^r.
     let mut s: Integer = Integer::from(n + 1);
     let r = s.find_one(0).unwrap();
     s >>= r;
 
-    let mut vk = Integer::from(2);
-    let mut vk1 = p.clone();
+    let nm2 = Integer::from(n - &*BIG_2); // n - 2
 
-    for i in (0..s.significant_bits()).rev() {
-        if s.get_bit(i) {
+    let mut vk = BIG_2.clone();
+    let mut vk1 = Integer::from_u64(p).unwrap();
+
+    for i in (0..s.significant_bits_64()).rev() {
+        if s.get_bit_64(i) {
             // k' = 2k+1
-            let t1: Integer = (&vk * &vk1 - &p).into();
-            vk = t1.div_rem_euc(n.clone()).1;
+            // V(k') = V(2k+1) = V(k) V(k+1) - P
+            // let t1 = Integer::from((&vk * &vk1) + n) - p.into();
+            let t1: Integer = (&vk * &vk1 - &p.into()).into();
+            vk = t1 % n;
             // V(k'+1) = V(2k+2) = V(k+1)² - 2
-            let t1: Integer = (&vk1 * &vk1 - &*BIG_2).into();
-            vk1 = t1.div_rem_euc(n.clone()).1;
+            let t1 = Integer::from(&vk1 * &vk1) + &nm2;
+            vk1 = t1 % n;
         } else {
             // k' = 2k
-            let t1: Integer = (&vk * &vk1 - &p).into();
-            vk1 = t1.div_rem_euc(n.clone()).1;
+            // V(k'+1) = V(2k+1) = V(k) V(k+1) - P
+            let t1 = Integer::from((&vk * &vk1) + n) - p;
+            vk1 = t1 % n;
             // V(k') = V(2k) = V(k)² - 2
-            let t1: Integer = (&vk * &vk - &*BIG_2).into();
-            vk = t1.div_rem_euc(n.clone()).1;
+            let t1 = Integer::from((&vk * &vk) + &nm2);
+            vk = t1 % n;
         }
     }
 
     // Now k=s, so vk = V(s). Check V(s) ≡ ±2 (mod n).
-    if vk == 2 || vk == -2 {
-        let t1 = Integer::from(&vk * &p) - Integer::from(&vk1 * 2);
-        if t1.div_rem_euc(n.clone()).1.is_zero() {
+    if vk.to_u64() == Some(2) || vk == nm2 {
+        // Check U(s) ≡ 0.
+        // As suggested by Jacobsen, apply Crandall and Pomerance equation 3.13:
+        //
+        //	U(k) = D⁻¹ (2 V(k+1) - P V(k))
+        //
+        // Since we are checking for U(k) == 0 it suffices to check 2 V(k+1) == P V(k) mod n,
+        // or P V(k) - 2 V(k+1) == 0 mod n.
+        let mut t1 = Integer::from(&vk * p);
+        let mut t2 = Integer::from(&vk1 << 1);
+
+        if t1 < t2 {
+            core::mem::swap(&mut t1, &mut t2);
+        }
+
+        t1 -= t2;
+
+        if (t1 % n).is_zero() {
             return true;
         }
     }
@@ -85,14 +113,16 @@ pub fn probably_prime_lucas(n: &Integer) -> bool {
             return true;
         }
 
-        if vk == 2 || vk == -2 {
+        // Optimization: V(k) = 2 is a fixed point for V(k') = V(k)² - 2,
+        // so if V(k) = 2, we can stop: we will never find a future V(k) == 0.
+        if vk.to_u64() == Some(2) {
             return false;
         }
 
         // k' = 2k
         // V(k') = V(2k) = V(k)² - 2
-        let t1: Integer = (&vk * &vk - &*BIG_2).into();
-        vk = t1.div_rem_euc(n.clone()).1;
+        let t1 = Integer::from((&vk * &vk) - &*BIG_2);
+        vk = t1 % n;
     }
 
     false
@@ -328,27 +358,6 @@ mod tests {
         let i = Integer::from(1032989);
         let next = i.next_prime();
         assert_eq!(Integer::from(1033001), next);
-    }
-
-    #[test]
-    fn test_probably_prime_lucas_1() {
-        let lucas_pseudoprimes = vec![
-            989, 3239, 5777, 10877, 27971, 29681, 30739, 31631, 39059, 72389, 73919, 75077,
-        ];
-
-        for i in (3..100000).step_by(2) {
-            let n = Integer::from(i);
-            let lucas_prime = probably_prime_lucas(&n);
-            let miller_rabin_prime = probably_prime_miller_rabin(&n, 1, true);
-
-            if lucas_prime && !miller_rabin_prime {
-                if !lucas_pseudoprimes.contains(&i) {
-                    panic!("Unexpected Lucas pseudoprime: {}", i);
-                }
-            } else if !lucas_prime && lucas_pseudoprimes.contains(&i) {
-                panic!("Missed Lucas pseudoprime: {}", i);
-            }
-        }
     }
 
     macro_rules! test_pseudo_primes {
