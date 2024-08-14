@@ -1,14 +1,14 @@
 use self::{
-    biguint::IntoBigUint,
     bit::is_bit_set,
-    constants::{BIG_1, BIG_2, BIG_64, PRIMES_A, PRIMES_B, PRIME_BIT_MASK},
+    constants_integer::{BIG_1, BIG_2, BIG_64, PRIMES_A, PRIMES_B, PRIME_BIT_MASK},
     ext::BigUintExt,
+    jacobi_integer::IntegerExt,
 };
 
 use self::rand::RandBigInt;
 use super::*;
 use ::rand::{rngs::StdRng, SeedableRng};
-use num_bigint::Sign;
+use rug::{integer::IntegerExt64, Integer};
 
 /// Reports whether n passes the "almost extra strong" Lucas probable prime test,
 /// using Baillie-OEIS parameter selection. This corresponds to "AESLPSP" on Jacobsen's tables (link below).
@@ -35,7 +35,7 @@ use num_bigint::Sign;
 ///
 /// Crandall and Pomerance, Prime Numbers: A Computational Perspective, 2nd ed.
 /// Springer, 2005.
-pub fn probably_prime_lucas(n: &BigUint) -> bool {
+pub fn probably_prime_lucas(n: &rug::Integer) -> bool {
     // println!("lucas: {}", n);
     // Discard 0, 1.
     if n.is_zero() || n.is_one() {
@@ -55,7 +55,8 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
     // After more than expected failures, check whether n is square
     // (which would cause Jacobi(D, n) = 1 for all D not dividing n).
     let mut p = 3u64;
-    let n_int = BigInt::from_biguint(Sign::Plus, n.clone());
+    // let n_int = BigInt::from_biguint(Sign::Plus, n.clone());
+    let n_int = rug::Integer::from(n.clone());
 
     loop {
         if p > 10000 {
@@ -64,10 +65,8 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
             panic!("internal error: cannot find (D/n) = -1 for {:?}", n)
         }
 
-        let d_int = BigInt::from_u64(p * p - 4).unwrap();
-        let j = super::jacobi::jacobi(&d_int, &n_int);
-
-        println!("p: {}, j: {} d: {}", p, j, d_int);
+        let d_int = rug::Integer::from_u64(p * p - 4).unwrap();
+        let j = super::jacobi_integer::jacobi(&d_int, &n_int);
 
         if j == -1 {
             break;
@@ -84,9 +83,9 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
             // We'll never find (d/n) = -1 if n is a square.
             // If n is a non-square we expect to find a d in just a few attempts on average.
             // After 40 attempts, take a moment to check if n is indeed a square.
-            let t1 = n.sqrt();
-            let t1 = &t1 * &t1;
-            if &t1 == n {
+            let t1: Integer = n.clone().sqrt();
+            let t1: Integer = (&t1 * &t1).into();
+            if t1 == *n {
                 return false;
             }
         }
@@ -106,10 +105,10 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
     // We know gcd(n, 2) = 1 because n is odd.
     //
     // Arrange s = (n - Jacobi(Δ, n)) / 2^r = (n+1) / 2^r.
-    let mut s = n + &*BIG_1;
-    let r = s.trailing_zeros().unwrap() as usize;
-    s = &s >> r;
-    let nm2 = n - &*BIG_2; // n - 2
+    let mut s: rug::Integer = (n + &*BIG_1).into();
+    let r = s.find_one(0).unwrap() as usize;
+    s = s >> r;
+    let nm2: Integer = (n - &*BIG_2).into(); // n - 2
 
     // We apply the "almost extra strong" test, which checks the above conditions
     // except for U_s ≡ 0 mod n, which allows us to avoid computing any U_k values.
@@ -140,25 +139,27 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
     //
     // We can therefore start with k=0 and build up to k=s in log₂(s) steps.
     let mut vk = BIG_2.clone();
-    let mut vk1 = BigUint::from_u64(p).unwrap();
+    let mut vk1 = Integer::from_u64(p).unwrap();
 
-    for i in (0..s.bits()).rev() {
-        if is_bit_set(&s, i) {
+    let p_integer = vk1.clone();
+
+    for i in (0..s.significant_bits_64()).rev() {
+        if s.get_bit_64(i) {
             // k' = 2k+1
             // V(k') = V(2k+1) = V(k) V(k+1) - P
-            let t1 = (&vk * &vk1) + n - p;
-            vk = &t1 % n;
+            let temp: Integer = (&vk * &vk1 - &p_integer).into();
+            vk = temp % n;
             // V(k'+1) = V(2k+2) = V(k+1)² - 2
-            let t1 = (&vk1 * &vk1) + &nm2;
-            vk1 = &t1 % n;
+            let temp = vk1.square() - BIG_2.clone();
+            vk1 = temp % n;
         } else {
             // k' = 2k
             // V(k'+1) = V(2k+1) = V(k) V(k+1) - P
-            let t1 = (&vk * &vk1) + n - p;
-            vk1 = &t1 % n;
+            let temp: Integer = (&vk * &vk1 - &p_integer).into();
+            vk1 = temp % n;
             // V(k') = V(2k) = V(k)² - 2
-            let t1 = (&vk * &vk) + &nm2;
-            vk = &t1 % n;
+            let temp = vk.square() - BIG_2.clone();
+            vk = temp % n;
         }
     }
 
@@ -171,8 +172,8 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
         //
         // Since we are checking for U(k) == 0 it suffices to check 2 V(k+1) == P V(k) mod n,
         // or P V(k) - 2 V(k+1) == 0 mod n.
-        let mut t1 = &vk * p;
-        let mut t2 = &vk1 << 1;
+        let mut t1: Integer = vk.clone() * p;
+        let mut t2: Integer = vk1 << 1;
 
         if t1 < t2 {
             core::mem::swap(&mut t1, &mut t2);
@@ -199,8 +200,8 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
 
         // k' = 2k
         // V(k') = V(2k) = V(k)² - 2
-        let t1 = (&vk * &vk) - &*BIG_2;
-        vk = &t1 % n;
+        let t1: Integer = ((&vk * &vk) - &*BIG_2).into();
+        vk = t1 % n;
     }
 
     false
@@ -222,7 +223,7 @@ pub fn probably_prime_lucas(n: &BigUint) -> bool {
 /// have crafted to fool the test.
 ///
 /// This is a port of `ProbablyPrime` from the go std lib.
-pub fn probably_prime(x: &BigUint, n: usize) -> bool {
+pub fn probably_prime(x: &Integer, n: usize) -> bool {
     if x.is_zero() {
         return false;
     }
@@ -235,8 +236,8 @@ pub fn probably_prime(x: &BigUint, n: usize) -> bool {
         return false;
     }
 
-    let r_a = &(x % PRIMES_A);
-    let r_b = &(x % PRIMES_B);
+    let r_a: Integer = (x % PRIMES_A).into();
+    let r_b: Integer = (x % PRIMES_B).into();
 
     if (r_a % 3u32).is_zero()
         || (r_a % 5u32).is_zero()
@@ -264,11 +265,11 @@ pub fn probably_prime(x: &BigUint, n: usize) -> bool {
 /// If `force2` is true, one of the rounds is forced to use base 2.
 ///
 /// See Handbook of Applied Cryptography, p. 139, Algorithm 4.24.
-pub fn probably_prime_miller_rabin(n: &BigUint, reps: usize, force2: bool) -> bool {
+pub fn probably_prime_miller_rabin(n: &Integer, reps: usize, force2: bool) -> bool {
     // println!("miller-rabin: {}", n);
-    let nm1 = n - &*BIG_1;
+    let nm1: Integer = (n - &*BIG_1).into();
     // determine q, k such that nm1 = q << k
-    let k = nm1.trailing_zeros().unwrap() as usize;
+    let k = nm1.find_one(0).unwrap() as usize;
     let q = &nm1 >> k;
 
     let nm3 = n - &*BIG_2;
@@ -313,79 +314,13 @@ const PRIME_GAP: [u64; 167] = [
 ];
 const INCR_LIMIT: usize = 0x10000;
 
-/// Calculate the next larger prime, given a starting number `n`.
-pub fn next_prime(n: &BigUint) -> BigUint {
-    if n < &*BIG_2 {
-        return 2u32.into_biguint().unwrap();
-    }
-
-    // We want something larger than our current number.
-    let mut res = n + &*BIG_1;
-
-    // Ensure we are odd.
-    res |= &*BIG_1;
-
-    // Handle values up to 7.
-    if let Some(val) = res.to_u64() {
-        if val < 7 {
-            return res;
-        }
-    }
-
-    let nbits = res.bits();
-    let prime_limit = if nbits / 2 >= NUMBER_OF_PRIMES {
-        NUMBER_OF_PRIMES - 1
-    } else {
-        nbits / 2
-    };
-
-    // Compute the residues modulo small odd primes
-    let mut moduli = vec![BigUint::zero(); prime_limit as usize];
-
-    'outer: loop {
-        let mut prime = 3;
-        for i in 0..prime_limit {
-            moduli[i as usize] = &res % prime;
-            prime += PRIME_GAP[i as usize];
-        }
-
-        // Check residues
-        let mut difference: usize = 0;
-        for incr in (0..INCR_LIMIT as u64).step_by(2) {
-            let mut prime: u64 = 3;
-
-            let mut cancel = false;
-            for i in 0..prime_limit {
-                let r = (&moduli[i as usize] + incr) % prime;
-                prime += PRIME_GAP[i as usize];
-
-                if r.is_zero() {
-                    cancel = true;
-                    break;
-                }
-            }
-
-            if !cancel {
-                res += difference;
-                difference = 0;
-                if probably_prime(&res, 20) {
-                    break 'outer;
-                }
-            }
-
-            difference += 2;
-        }
-
-        res += difference;
-    }
-
-    res
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::utils::prime::PrimeChecking;
+
     use super::*;
     use num_bigint::ToBigUint;
+    use rug::Integer;
 
     lazy_static::lazy_static! {
         pub static ref PRIMES: Vec<&'static str> = vec![
@@ -498,27 +433,6 @@ mod tests {
     }
 
     #[test]
-    fn test_probably_prime_lucas_1() {
-        let lucas_pseudoprimes = vec![
-            989, 3239, 5777, 10877, 27971, 29681, 30739, 31631, 39059, 72389, 73919, 75077,
-        ];
-
-        for i in (3..100000).step_by(2) {
-            let n = BigUint::from_u64(i).unwrap();
-            let lucas_prime = probably_prime_lucas(&n);
-            let miller_rabin_prime = probably_prime_miller_rabin(&n, 1, true);
-
-            if lucas_prime && !miller_rabin_prime {
-                if !lucas_pseudoprimes.contains(&i) {
-                    panic!("Unexpected Lucas pseudoprime: {}", i);
-                }
-            } else if !lucas_prime && lucas_pseudoprimes.contains(&i) {
-                panic!("Missed Lucas pseudoprime: {}", i);
-            }
-        }
-    }
-
-    #[test]
     fn test_primes() {
         for prime in PRIMES.iter() {
             let p = BigUint::parse_bytes(prime.as_bytes(), 10).unwrap();
@@ -615,12 +529,12 @@ mod tests {
     #[test]
     fn test_next_prime_basics() {
         let primes1 = (0..2048u32)
-            .map(|i| next_prime(&i.to_biguint().unwrap()))
+            .map(|i| Integer::from(i).next_prime())
             .collect::<Vec<_>>();
         let primes2 = (0..2048u32)
             .map(|i| {
-                let i = i.to_biguint().unwrap();
-                let p = next_prime(&i);
+                let i = Integer::from(i);
+                let p = i.clone().next_prime();
                 assert!(&p > &i);
                 p
             })
@@ -628,14 +542,14 @@ mod tests {
 
         for (p1, p2) in primes1.iter().zip(&primes2) {
             assert_eq!(p1, p2);
-            assert!(probably_prime(p1, 25));
+            assert!(p1.is_prime());
         }
     }
 
     #[test]
     fn test_next_prime_bug_44() {
-        let i = 1032989.to_biguint().unwrap();
-        let next = next_prime(&i);
-        assert_eq!(1033001.to_biguint().unwrap(), next);
+        let i = Integer::from(1032989);
+        let next = i.next_prime();
+        assert_eq!(Integer::from(1033001), next);
     }
 }

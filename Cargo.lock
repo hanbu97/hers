@@ -282,6 +282,8 @@ dependencies = [
  "gmp-mpfr-sys",
  "libc",
  "libm",
+ "num-integer",
+ "num-traits",
 ]
 
 [[package]]

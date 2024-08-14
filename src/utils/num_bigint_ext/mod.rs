@@ -15,4 +15,8 @@ pub mod jacobi;
 pub mod prime;
 pub mod rand;
 
+pub mod constants_integer;
+pub mod jacobi_integer;
+pub mod prime_integer;
+
 pub use prime::probably_prime;

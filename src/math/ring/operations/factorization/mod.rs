@@ -1,6 +1,7 @@
 pub mod ecm;
 pub mod pollards_rho;
 pub mod traits;
+use num_traits::One;
 
 use rug::Integer;
 
@@ -31,10 +32,8 @@ pub fn get_factors(m: &Integer) -> anyhow::Result<Vec<Integer>> {
         }
     }
 
-    let one = Integer::from(1u32);
-
     // Second, find the remaining large prime factors
-    while m_cpy != one {
+    while !m_cpy.is_one() {
         if m_cpy.is_prime() {
             f.insert(m_cpy.clone());
             break;
@@ -42,7 +41,7 @@ pub fn get_factors(m: &Integer) -> anyhow::Result<Vec<Integer>> {
 
         // Try Pollard's Rho algorithm first
         let mut factor: Integer = get_factor_pollard_rho(&m_cpy);
-        if factor == one || factor == m_cpy {
+        if factor.is_one() || factor == m_cpy {
             // If Pollard's Rho fails, try ECM factorization
             factor = get_factor_ecm(&m_cpy)?;
         }
@@ -75,7 +74,6 @@ pub fn get_factors(m: &Integer) -> anyhow::Result<Vec<Integer>> {
 pub fn check_factorization(p: &Integer, factors: &[Integer]) -> bool {
     let mut remaining = p.clone();
     let zero = Integer::from(0);
-    let one = Integer::from(1);
 
     for factor in factors {
         while (remaining.clone() % factor) == zero {
@@ -83,7 +81,7 @@ pub fn check_factorization(p: &Integer, factors: &[Integer]) -> bool {
         }
     }
 
-    remaining == one
+    remaining.is_one()
 }
 
 #[cfg(test)]
