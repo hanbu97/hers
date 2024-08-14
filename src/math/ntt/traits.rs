@@ -1,6 +1,6 @@
 use enum_dispatch::enum_dispatch;
 
-use super::params::{NTTParams, NTTTable};
+use super::params::NTTTable;
 
 // NTT trait to provide lexibility on what type of NTT is used by the struct Ring.
 #[enum_dispatch]

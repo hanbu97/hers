@@ -8,7 +8,7 @@ use traits::NumberTheoreticTransform;
 
 pub use implementations::standard_ntt::StandardNTT;
 
-use self::params::{NTTParams, NTTTable};
+use self::params::{NTTParameters, NTTTable};
 
 // In ntt/implementations/mod.rs
 #[enum_dispatch(NumberTheoreticTransform)]
@@ -20,7 +20,7 @@ pub enum NTTImplementations {
 }
 
 impl NTTImplementations {
-    pub fn new_standard(params: NTTParams, ntt_table: NTTTable) -> Self {
+    pub fn new_standard(params: NTTParameters, ntt_table: NTTTable) -> Self {
         NTTImplementations::StandardNTT(StandardNTT::new(params, ntt_table))
     }
 }

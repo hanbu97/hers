@@ -1,6 +1,15 @@
 /// Parameters required for creating an NTT implementation.
 /// (n, modulus, nth_root, mask, b_red_constant, m_red_constant)
-pub type NTTParams = (u64, u64, u64, u64, [u64; 2], u64);
+// pub type NTTParams = (u64, u64, u64, u64, [u64; 2], u64);
+
+pub struct NTTParameters {
+    pub degree: u64,
+    pub modulus: u64,
+    pub nth_root: u64,
+    pub mask: u64,
+    pub b_red_constant: [u64; 2],
+    pub m_red_constant: u64,
+}
 
 /// NTTTable stores all the constants that are specifically tied to the Number Theoretic Transform (NTT).
 /// These precomputed values are used to optimize NTT operations.

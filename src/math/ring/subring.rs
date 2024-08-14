@@ -9,7 +9,11 @@ use super::{
 };
 use crate::{
     math::{
-        ntt::{params::NTTTable, traits::NumberTheoreticTransform, NTTImplementations},
+        ntt::{
+            params::{NTTParameters, NTTTable},
+            traits::NumberTheoreticTransform,
+            NTTImplementations,
+        },
         ring::{
             constants::MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS,
             reduction::{
@@ -77,12 +81,17 @@ impl SubRing {
     /// # Returns
     ///
     /// A Result containing either the new SubRing or an error
-    pub fn new_with_custom_ntt(
+    pub fn new_with_custom_ntt<F>(
         degree: u64,
         modulus: u64,
         // ntt_creator: F,
-        ntt: NTTImplementations,
-    ) -> Result<Self, SubRingError> {
+        // ntt: NTTImplementations,
+        ntt_creator: &F,
+        nth_root: u64,
+    ) -> Result<Self, SubRingError>
+    where
+        F: Fn(NTTParameters, NTTTable) -> NTTImplementations,
+    {
         // Check if degree is a power of 2 and greater than the minimum
         if degree < MINIMUM_RING_DEGREE_FOR_LOOP_UNROLLED_OPS || !degree.is_power_of_two() {
             return Err(SubRingError::InvalidRingDegree(
@@ -112,6 +121,15 @@ impl SubRing {
         // Compute Montgomery reduction constant
         let m_red_constant = compute_montgomery_constant(modulus);
 
+        let ntt_parms = NTTParameters {
+            degree,
+            modulus,
+            nth_root,
+            mask,
+            b_red_constant,
+            m_red_constant,
+        };
+        let ntt = ntt_creator(ntt_parms, NTTTable::default());
         // let ntt = ntt_creator(&(n, modulus, nth_root, mask, b_red_constant, m_red_constant));
 
         Ok(Self {

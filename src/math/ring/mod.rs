@@ -4,7 +4,10 @@ use self::{errors::RingError, subring::SubRing};
 use itertools::Itertools;
 use num_bigint::BigInt;
 
-use super::ntt::NTTImplementations;
+use super::ntt::{
+    params::{NTTParameters, NTTTable},
+    NTTImplementations,
+};
 
 pub mod constants;
 pub mod errors;
@@ -42,28 +45,38 @@ impl Ring {
     ///
     /// This function creates a new RNS Ring using the Standard NTT. It performs various checks on the input parameters
     /// to ensure they are valid for creating an NTT-enabling ring.
-    pub fn new(degree: u64, moduli: Vec<u64>) -> Result<Self, RingError> {
-        unimplemented!()
+    pub fn new(degree: u64, moduli: Vec<u64>) -> anyhow::Result<Self> {
+        Self::new_with_custom_ntt(
+            degree,
+            moduli,
+            |params, table| NTTImplementations::new_standard(params, table),
+            2 * degree,
+        )
     }
 
-    pub fn new_with_custom_ntt(
-        n: u64,
+    pub fn new_with_custom_ntt<F>(
+        degree: u64,
         moduli: Vec<u64>,
-        ntt: NTTImplementations,
-    ) -> Result<Self, RingError> {
-        // Check if N is a power of 2
-        if !n.is_power_of_two() {
-            return Err(RingError::InvalidRingDegree(n));
+        // ntt: NTTImplementations,
+        ntt_creator: F,
+        nth_root: u64,
+    ) -> anyhow::Result<Self>
+    where
+        F: Fn(NTTParameters, NTTTable) -> NTTImplementations,
+    {
+        // Check if degree is a power of 2
+        if !degree.is_power_of_two() {
+            return Err(RingError::InvalidRingDegree(degree).into());
         }
 
         // Check if moduli is non-empty
         if moduli.is_empty() {
-            return Err(RingError::EmptyModuli);
+            return Err(RingError::EmptyModuli.into());
         }
 
         // Check if all moduli are distinct primes
         if moduli.iter().len() == moduli.iter().unique().collect::<Vec<_>>().len() {
-            return Err(RingError::NonDistinctPrimeModuli);
+            return Err(RingError::NonDistinctPrimeModuli.into());
         }
 
         // Compute bigQ for all levels
@@ -77,13 +90,53 @@ impl Ring {
         // Init SubRings
         let mut sub_rings = Vec::with_capacity(moduli.len());
         for &modulus in &moduli {
-            let sub_ring = SubRing::new_with_custom_ntt(n, modulus, ntt.clone())?;
+            let sub_ring = SubRing::new_with_custom_ntt(degree, modulus, &ntt_creator, nth_root)?;
             sub_rings.push(sub_ring);
         }
 
         // Compute rescale constants
         let rescale_constants = compute_rescale_constants(&sub_rings);
 
+        let mut ring = Ring {
+            modulus_at_level,
+            sub_rings,
+            rescale_constants,
+            level: moduli.len() - 1,
+        };
+
+        // Compute NTT constants
+        ring.compute_ntt_constants(None, None)?;
+
         unimplemented!()
+    }
+
+    /// Computes the NTT constants for all SubRings in the Ring.
+    ///
+    /// This function checks that each modulus is NTT-friendly (i.e., prime and congruent to 1 mod 2N)
+    /// and computes the necessary variables for the NTT.
+    ///
+    /// # Arguments
+    ///
+    /// * `primitive_roots` - Optional vector of primitive roots for each SubRing
+    /// * `factors` - Optional vector of prime factors for each SubRing's modulus minus 1
+    ///
+    /// # Returns
+    ///
+    /// * `Result<(), RingError>` - Ok(()) if successful, or an error if any SubRing fails to compute its NTT constants
+    pub fn compute_ntt_constants(
+        &mut self,
+        primitive_roots: Option<Vec<u64>>,
+        factors: Option<Vec<Vec<u64>>>,
+    ) -> anyhow::Result<()> {
+        for (i, sub_ring) in self.sub_rings.iter_mut().enumerate() {
+            if let (Some(roots), Some(facts)) = (&primitive_roots, &factors) {
+                sub_ring.ntt_table.primitive_root = roots[i];
+                sub_ring.factors = facts[i].clone();
+            }
+
+            sub_ring.compute_ntt_constants()?;
+        }
+
+        Ok(())
     }
 }
