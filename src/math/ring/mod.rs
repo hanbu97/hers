@@ -542,4 +542,13 @@ mod tests {
             pi: PI60[PI60.len() - 14..].to_vec(),
         },];
     }
+
+    fn test_string(opname: &str, ring_q: &Ring) -> String {
+        format!(
+            "{}/N={}/limbs={}",
+            opname,
+            ring_q.degree(),
+            ring_q.moduli_chain_length()
+        )
+    }
 }
