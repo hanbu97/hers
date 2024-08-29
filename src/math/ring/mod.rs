@@ -51,7 +51,7 @@ impl Ring {
         Self::new_with_custom_ntt(
             degree,
             moduli,
-            |params, table| NTTImplementations::new_standard(params, table),
+            |params, _table| NTTImplementations::new_standard(params),
             2 * degree,
         )
     }
@@ -358,7 +358,11 @@ impl Ring {
     /// Evaluates p2 = NTT(p1)
     pub fn ntt(&self, p1: &Poly, p2: &mut Poly) {
         for i in 0..=self.level {
-            self.sub_rings[i].ntt(&p1.coeffs[i], &mut p2.coeffs[i]);
+            self.sub_rings[i].ntt(
+                &p1.coeffs[i],
+                &mut p2.coeffs[i],
+                &self.sub_rings[i].ntt_table,
+            );
         }
     }
 

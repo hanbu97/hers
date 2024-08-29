@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 // Poly struct definition
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Poly {
     pub coeffs: Vec<Vec<u64>>,
 }

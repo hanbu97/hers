@@ -421,26 +421,26 @@ impl SubRing {
 
     /// Evaluates p2 = NTT(p1).
     #[inline(always)]
-    pub fn ntt(&self, p1: &[u64], p2: &mut [u64]) {
-        self.ntt.forward(p1, p2);
+    pub fn ntt(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
+        self.ntt.forward(p1, p2, ntt_table);
     }
 
     /// Evaluates p2 = NTT(p1) with p2 in [0, 2*modulus-1].
     #[inline(always)]
-    pub fn ntt_lazy(&self, p1: &[u64], p2: &mut [u64]) {
-        self.ntt.forward_lazy(p1, p2);
+    pub fn ntt_lazy(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
+        self.ntt.forward_lazy(p1, p2, ntt_table);
     }
 
     /// Evaluates p2 = INTT(p1).
     #[inline(always)]
-    pub fn intt(&self, p1: &[u64], p2: &mut [u64]) {
-        self.ntt.backward(p1, p2);
+    pub fn intt(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
+        self.ntt.backward(p1, p2, ntt_table);
     }
 
     /// Evaluates p2 = INTT(p1) with p2 in [0, 2*modulus-1].
     #[inline(always)]
-    pub fn intt_lazy(&self, p1: &[u64], p2: &mut [u64]) {
-        self.ntt.backward_lazy(p1, p2);
+    pub fn intt_lazy(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
+        self.ntt.backward_lazy(p1, p2, ntt_table);
     }
 
     /// Generates the NTT constants for the target SubRing.

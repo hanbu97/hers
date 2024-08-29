@@ -13,22 +13,21 @@ pub struct StandardNTT {
 }
 
 impl StandardNTT {
-    pub fn new(params: NTTParameters, ntt_table: NTTTable) -> Self {
-        // let (n, modulus, _, _, b_red_constant, m_red_constant) = params;
+    pub fn new(params: NTTParameters) -> Self {
         StandardNTT {
             base: NTTBase {
                 degree: params.degree as usize,
                 modulus: params.modulus,
                 m_red_constant: params.m_red_constant,
                 b_red_constant: params.b_red_constant,
-                ntt_table,
+                // ntt_table,
             },
         }
     }
 }
 
 impl NumberTheoreticTransform for StandardNTT {
-    fn forward(&self, p1: &[u64], p2: &mut [u64]) {
+    fn forward(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
         ntt_standard(
             p1,
             p2,
@@ -36,42 +35,42 @@ impl NumberTheoreticTransform for StandardNTT {
             self.base.modulus,
             self.base.m_red_constant,
             self.base.b_red_constant,
-            &self.base.ntt_table.roots_forward,
+            &ntt_table.roots_forward,
         )
     }
 
-    fn forward_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+    fn forward_lazy(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
         ntt_standard_lazy(
             p1,
             p2,
             self.base.degree,
             self.base.modulus,
             self.base.m_red_constant,
-            &self.base.ntt_table.roots_forward,
+            &ntt_table.roots_forward,
         )
     }
 
-    fn backward(&self, p1: &[u64], p2: &mut [u64]) {
+    fn backward(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
         intt_standard(
             p1,
             p2,
             self.base.degree,
-            self.base.ntt_table.n_inv,
+            ntt_table.n_inv,
             self.base.modulus,
             self.base.m_red_constant,
-            &self.base.ntt_table.roots_backward,
+            &ntt_table.roots_backward,
         )
     }
 
-    fn backward_lazy(&self, p1: &[u64], p2: &mut [u64]) {
+    fn backward_lazy(&self, p1: &[u64], p2: &mut [u64], ntt_table: &NTTTable) {
         intt_standard_lazy(
             p1,
             p2,
             self.base.degree,
-            self.base.ntt_table.n_inv,
+            ntt_table.n_inv,
             self.base.modulus,
             self.base.m_red_constant,
-            &self.base.ntt_table.roots_backward,
+            &ntt_table.roots_backward,
         )
     }
 }

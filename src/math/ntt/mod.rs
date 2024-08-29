@@ -20,8 +20,8 @@ pub enum NTTImplementations {
 }
 
 impl NTTImplementations {
-    pub fn new_standard(params: NTTParameters, ntt_table: NTTTable) -> Self {
-        NTTImplementations::StandardNTT(StandardNTT::new(params, ntt_table))
+    pub fn new_standard(params: NTTParameters) -> Self {
+        NTTImplementations::StandardNTT(StandardNTT::new(params))
     }
 }
 
@@ -78,7 +78,7 @@ mod test {
             x.copy(&test_case.poly);
             y.copy(&test_case.poly_ntt);
 
-            // ring.ntt(&x, &mut z);
+            ring.ntt(&x, &mut z);
 
             println!("subrings len: {}", ring.sub_rings.len());
             println!(
@@ -91,9 +91,7 @@ mod test {
                 ring.sub_rings[1].ntt_table.roots_forward
             );
 
-            // println!("x: {:?}", x);
-            // println!("y: {:?}", y);
-            // println!("z: {:?}", z);
+            assert_eq!(y, z);
         }
     }
 }
