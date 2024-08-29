@@ -64,6 +64,25 @@ mod test {
         for test_case in TEST_VECTOR.iter() {
             let ring =
                 Ring::new(test_case.degree, test_case.qis.clone()).expect("Failed to create ring");
+
+            println!(
+                "degree: {}, limbs: {}",
+                ring.degree(),
+                ring.moduli_chain_length()
+            );
+
+            let mut x = ring.new_poly();
+            let mut y = ring.new_poly();
+            let mut z = ring.new_poly();
+
+            x.copy(&test_case.poly);
+            y.copy(&test_case.poly_ntt);
+
+            ring.ntt(&x, &mut z);
+
+            println!("x: {:?}", x);
+            println!("y: {:?}", y);
+            println!("z: {:?}", z);
         }
     }
 }

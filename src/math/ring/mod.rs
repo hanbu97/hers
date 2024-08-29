@@ -66,8 +66,6 @@ impl Ring {
     where
         F: Fn(NTTParameters, NTTTable) -> NTTImplementations,
     {
-        println!("nth root: {}", nth_root);
-
         // Check if degree is a power of 2
         if !degree.is_power_of_two() {
             return Err(RingError::InvalidRingDegree(degree).into());
@@ -96,13 +94,6 @@ impl Ring {
         for &modulus in &moduli {
             let sub_ring = SubRing::new_with_custom_ntt(degree, modulus, &ntt_creator, nth_root)?;
             sub_rings.push(sub_ring);
-        }
-
-        for (i, sub_ring) in sub_rings.iter_mut().enumerate() {
-            println!(
-                "{}: ntt table nth_root after init: {}",
-                i, sub_ring.ntt_table.nth_root
-            );
         }
 
         // Compute rescale constants
@@ -140,18 +131,20 @@ impl Ring {
         factors: Option<Vec<Vec<u64>>>,
     ) -> anyhow::Result<()> {
         for (i, sub_ring) in self.sub_rings.iter_mut().enumerate() {
-            println!("{}: ntt table nth_root: {}", i, sub_ring.ntt_table.nth_root);
             if let (Some(roots), Some(facts)) = (&primitive_roots, &factors) {
                 sub_ring.ntt_table.primitive_root = roots[i];
                 sub_ring.factors = facts[i].clone();
             }
 
-            println!("{}: ntt table nth_root: {}", i, sub_ring.ntt_table.nth_root);
-
             sub_ring.compute_ntt_constants()?;
         }
 
         Ok(())
+    }
+
+    /// NewPoly creates a new polynomial with all coefficients set to 0.
+    pub fn new_poly(&self) -> Poly {
+        Poly::new(self.degree() as usize, self.level)
     }
 
     // Operations
@@ -350,6 +343,11 @@ impl Ring {
     /// Returns the list of primes in the modulus chain.
     pub fn moduli_chain(&self) -> Vec<u64> {
         self.sub_rings.iter().map(|sr| sr.modulus).collect()
+    }
+
+    /// ModuliChainLength returns the number of primes in the RNS basis of the ring.
+    pub fn moduli_chain_length(&self) -> usize {
+        self.sub_rings.len()
     }
 
     /// Returns the ring degree.
