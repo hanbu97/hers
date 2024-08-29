@@ -22,6 +22,7 @@ pub fn ntt_standard(
     b_red_constant: [u64; 2],
     roots: &[u64],
 ) {
+    println!("ntt_standard roots: {:?}", roots);
     ntt_core_lazy(p1, p2, degree as usize, modulus, m_red_constant, roots);
     reduce_vec_self(p2, modulus, b_red_constant);
 }
@@ -43,6 +44,7 @@ pub fn ntt_standard_lazy(
     m_red_constant: u64,
     roots: &[u64],
 ) {
+    println!("ntt_standard_lazy");
     ntt_core_lazy(p1, p2, n, modulus, m_red_constant, roots);
 }
 

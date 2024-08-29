@@ -85,8 +85,6 @@ impl SubRing {
     pub fn new_with_custom_ntt<F>(
         degree: u64,
         modulus: u64,
-        // ntt_creator: F,
-        // ntt: NTTImplementations,
         ntt_creator: &F,
         nth_root: u64,
     ) -> Result<Self, SubRingError>
@@ -135,7 +133,6 @@ impl SubRing {
         ntt_table.nth_root = nth_root;
 
         let ntt = ntt_creator(ntt_parms, ntt_table.clone());
-        // let ntt = ntt_creator(&(n, modulus, nth_root, mask, b_red_constant, m_red_constant));
 
         Ok(Self {
             ntt,

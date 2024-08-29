@@ -17,7 +17,7 @@ impl StandardNTT {
         // let (n, modulus, _, _, b_red_constant, m_red_constant) = params;
         StandardNTT {
             base: NTTBase {
-                n: params.degree as usize,
+                degree: params.degree as usize,
                 modulus: params.modulus,
                 m_red_constant: params.m_red_constant,
                 b_red_constant: params.b_red_constant,
@@ -32,7 +32,7 @@ impl NumberTheoreticTransform for StandardNTT {
         ntt_standard(
             p1,
             p2,
-            self.base.n as u64,
+            self.base.degree as u64,
             self.base.modulus,
             self.base.m_red_constant,
             self.base.b_red_constant,
@@ -44,7 +44,7 @@ impl NumberTheoreticTransform for StandardNTT {
         ntt_standard_lazy(
             p1,
             p2,
-            self.base.n,
+            self.base.degree,
             self.base.modulus,
             self.base.m_red_constant,
             &self.base.ntt_table.roots_forward,
@@ -55,7 +55,7 @@ impl NumberTheoreticTransform for StandardNTT {
         intt_standard(
             p1,
             p2,
-            self.base.n,
+            self.base.degree,
             self.base.ntt_table.n_inv,
             self.base.modulus,
             self.base.m_red_constant,
@@ -67,7 +67,7 @@ impl NumberTheoreticTransform for StandardNTT {
         intt_standard_lazy(
             p1,
             p2,
-            self.base.n,
+            self.base.degree,
             self.base.ntt_table.n_inv,
             self.base.modulus,
             self.base.m_red_constant,

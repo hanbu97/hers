@@ -29,7 +29,7 @@ impl NTTImplementations {
 mod test {
     use crate::math::ring::{polynomial::Poly, Ring};
 
-    use super::*;
+    // use super::*;
 
     struct TestCase {
         pub degree: u64,
@@ -78,11 +78,22 @@ mod test {
             x.copy(&test_case.poly);
             y.copy(&test_case.poly_ntt);
 
-            ring.ntt(&x, &mut z);
+            // ring.ntt(&x, &mut z);
 
-            println!("x: {:?}", x);
-            println!("y: {:?}", y);
-            println!("z: {:?}", z);
+            println!("subrings len: {}", ring.sub_rings.len());
+            println!(
+                "ring ntt roots: {:?}",
+                ring.sub_rings[0].ntt_table.roots_forward
+            );
+
+            println!(
+                "ring ntt roots: {:?}",
+                ring.sub_rings[1].ntt_table.roots_forward
+            );
+
+            // println!("x: {:?}", x);
+            // println!("y: {:?}", y);
+            // println!("z: {:?}", z);
         }
     }
 }
