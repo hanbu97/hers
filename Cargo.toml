@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.86"
 blake2 = "0.10.6"
+blake3 = "1.5.4"
 enum_dispatch = "0.3.13"
 getrandom = "0.2.15"
 itertools = "0.13.0"
