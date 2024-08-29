@@ -1,8 +1,9 @@
 use crate::math::ring::operations::compute_rescale_constants;
 
-use self::{errors::RingError, subring::SubRing};
+use self::{errors::RingError, polynomial::Poly, subring::SubRing};
 use itertools::Itertools;
 use num_bigint::BigInt;
+use num_traits::{ToPrimitive, Zero};
 
 use super::ntt::{
     params::{NTTParameters, NTTTable},
@@ -12,6 +13,7 @@ use super::ntt::{
 pub mod constants;
 pub mod errors;
 pub mod operations;
+pub mod polynomial;
 pub mod reduction;
 pub mod subring;
 pub mod types;
@@ -107,7 +109,7 @@ impl Ring {
         // Compute NTT constants
         ring.compute_ntt_constants(None, None)?;
 
-        unimplemented!()
+        Ok(ring)
     }
 
     /// Computes the NTT constants for all SubRings in the Ring.
@@ -138,5 +140,222 @@ impl Ring {
         }
 
         Ok(())
+    }
+
+    // Operations
+    /// Add evaluates p3 = p1 + p2 coefficient-wise in the ring.
+    pub fn add(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].add(&p1.coeffs[i], &p2.coeffs[i], &mut p3.coeffs[i]);
+        }
+    }
+
+    /// AddLazy evaluates p3 = p1 + p2 coefficient-wise in the ring, with p3 in [0, 2*modulus-1].
+    pub fn add_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].add_lazy(&p1.coeffs[i], &p2.coeffs[i], &mut p3.coeffs[i]);
+        }
+    }
+
+    /// Sub evaluates p3 = p1 - p2 coefficient-wise in the ring.
+    pub fn sub(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].sub(&p1.coeffs[i], &p2.coeffs[i], &mut p3.coeffs[i]);
+        }
+    }
+
+    /// Neg evaluates p2 = -p1 coefficient-wise in the ring.
+    pub fn neg(&self, p1: &Poly, p2: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].neg(&p1.coeffs[i], &mut p2.coeffs[i]);
+        }
+    }
+
+    /// Reduce evaluates p2 = p1 coefficient-wise mod modulus in the ring.
+    pub fn reduce(&self, p1: &Poly, p2: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].reduce(&p1.coeffs[i], &mut p2.coeffs[i]);
+        }
+    }
+
+    /// ReduceLazy evaluates p2 = p1 coefficient-wise mod modulus in the ring, with p2 in [0, 2*modulus-1].
+    pub fn reduce_lazy(&self, p1: &Poly, p2: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].reduce_lazy(&p1.coeffs[i], &mut p2.coeffs[i]);
+        }
+    }
+
+    /// SubLazy evaluates p3 = p1 - p2 coefficient-wise in the ring, with p3 in [0, 2*modulus-1].
+    pub fn sub_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].sub_lazy(&p1.coeffs[i], &p2.coeffs[i], &mut p3.coeffs[i]);
+        }
+    }
+
+    /// MulCoeffsBarrett evaluates p3 = p1 * p2 coefficient-wise in the ring, with Barrett reduction.
+    pub fn mul_coeffs_barrett(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_barrett(&p1.coeffs[i], &p2.coeffs[i], &mut p3.coeffs[i]);
+        }
+    }
+
+    /// MulCoeffsBarrettLazy evaluates p3 = p1 * p2 coefficient-wise in the ring, with Barrett reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_barrett_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_barrett_lazy(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsBarrettThenAdd evaluates p3 = p3 + p1 * p2 coefficient-wise in the ring, with Barrett reduction.
+    pub fn mul_coeffs_barrett_then_add(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_barrett_then_add(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsBarrettThenAddLazy evaluates p3 = p1 * p2 coefficient-wise in the ring, with Barrett reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_barrett_then_add_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_barrett_then_add_lazy(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomery evaluates p3 = p1 * p2 coefficient-wise in the ring, with Montgomery reduction.
+    pub fn mul_coeffs_montgomery(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomeryLazy evaluates p3 = p1 * p2 coefficient-wise in the ring, with Montgomery reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_montgomery_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery_lazy(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomeryLazyThenNeg evaluates p3 = -p1 * p2 coefficient-wise in the ring, with Montgomery reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_montgomery_lazy_then_neg(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery_lazy_then_neg(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomeryThenAdd evaluates p3 = p3 + p1 * p2 coefficient-wise in the ring, with Montgomery reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_montgomery_then_add(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery_then_add(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomeryThenAddLazy evaluates p3 = p3 + p1 * p2 coefficient-wise in the ring, with Montgomery reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_montgomery_then_add_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery_then_add_lazy(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomeryThenSub evaluates p3 = p3 - p1 * p2 coefficient-wise in the ring, with Montgomery reduction.
+    pub fn mul_coeffs_montgomery_then_sub(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery_then_sub(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomeryThenSubLazy evaluates p3 = p3 - p1 * p2 coefficient-wise in the ring, with Montgomery reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_montgomery_then_sub_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery_then_sub_lazy(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    /// MulCoeffsMontgomeryThenSubLazy evaluates p3 = p3 - p1 * p2 coefficient-wise in the ring, with Montgomery reduction, with p3 in [0, 2*modulus-1].
+    pub fn mul_coeffs_montgomery_lazy_then_sub_lazy(&self, p1: &Poly, p2: &Poly, p3: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].mul_coeffs_montgomery_lazy_then_sub_lazy(
+                &p1.coeffs[i],
+                &p2.coeffs[i],
+                &mut p3.coeffs[i],
+            );
+        }
+    }
+
+    // AddScalar evaluates p2 = p1 + scalar coefficient-wise in the ring.
+    pub fn add_scalar(&self, p1: &Poly, scalar: u64, p2: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].add_scalar(&p1.coeffs[i], scalar, &mut p2.coeffs[i]);
+        }
+    }
+
+    // AddScalarBigint evaluates p2 = p1 + scalar coefficient-wise in the ring.
+    pub fn add_scalar_bigint(&self, p1: &Poly, scalar: &BigInt, p2: &mut Poly) {
+        for i in 0..=self.level {
+            let tmp = scalar % BigInt::from(self.sub_rings[i].modulus);
+            self.sub_rings[i].add_scalar(&p1.coeffs[i], tmp.to_u64().unwrap(), &mut p2.coeffs[i]);
+        }
+    }
+
+    /// Returns the list of primes in the modulus chain.
+    pub fn moduli_chain(&self) -> Vec<u64> {
+        self.sub_rings.iter().map(|sr| sr.modulus).collect()
+    }
+
+    /// Returns the ring degree.
+    pub fn degree(&self) -> u64 {
+        self.sub_rings[0].degree
+    }
+
+    /// Evaluates p2 = NTT(p1)
+    pub fn ntt(&self, p1: &Poly, p2: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].ntt(&p1.coeffs[i], &mut p2.coeffs[i]);
+        }
+    }
+
+    /// Evaluates p2 = p1 * (2^64)^-1 coefficient-wise in the ring.
+    pub fn m_form(&self, p1: &Poly, p2: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].m_form(&p1.coeffs[i], &mut p2.coeffs[i]);
+        }
     }
 }
