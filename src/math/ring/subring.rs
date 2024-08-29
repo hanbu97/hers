@@ -31,6 +31,7 @@ fn calculate_mask(modulus: u64) -> u64 {
 /// SubRing stores precomputation for fast modular reduction and NTT for a given modulus.
 /// It encapsulates all the necessary information and methods to perform efficient
 /// polynomial operations in a specific prime field.
+#[derive(Clone, Debug)]
 pub struct SubRing {
     /// The Number Theoretic Transform implementation.
     /// This provides flexibility in choosing different NTT algorithms.
@@ -129,7 +130,11 @@ impl SubRing {
             b_red_constant,
             m_red_constant,
         };
-        let ntt = ntt_creator(ntt_parms, NTTTable::default());
+
+        let mut ntt_table = NTTTable::default();
+        ntt_table.nth_root = nth_root;
+
+        let ntt = ntt_creator(ntt_parms, ntt_table.clone());
         // let ntt = ntt_creator(&(n, modulus, nth_root, mask, b_red_constant, m_red_constant));
 
         Ok(Self {
@@ -139,7 +144,7 @@ impl SubRing {
             mask,
             b_red_constant,
             m_red_constant,
-            ntt_table: NTTTable::default(),
+            ntt_table,
             factors: vec![],
         })
     }
