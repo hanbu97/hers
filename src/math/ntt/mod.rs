@@ -79,19 +79,10 @@ mod test {
             y.copy(&test_case.poly_ntt);
 
             ring.ntt(&x, &mut z);
-
-            println!("subrings len: {}", ring.sub_rings.len());
-            println!(
-                "ring ntt roots: {:?}",
-                ring.sub_rings[0].ntt_table.roots_forward
-            );
-
-            println!(
-                "ring ntt roots: {:?}",
-                ring.sub_rings[1].ntt_table.roots_forward
-            );
-
             assert_eq!(y, z);
+
+            ring.intt(&y, &mut z);
+            assert_eq!(x, z);
         }
     }
 }

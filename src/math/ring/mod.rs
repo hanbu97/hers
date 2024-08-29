@@ -366,6 +366,17 @@ impl Ring {
         }
     }
 
+    /// INTT evaluates p2 = INTT(p1).
+    pub fn intt(&self, p1: &Poly, p2: &mut Poly) {
+        for i in 0..=self.level {
+            self.sub_rings[i].intt(
+                &p1.coeffs[i],
+                &mut p2.coeffs[i],
+                &self.sub_rings[i].ntt_table,
+            );
+        }
+    }
+
     /// Evaluates p2 = p1 * (2^64)^-1 coefficient-wise in the ring.
     pub fn m_form(&self, p1: &Poly, p2: &mut Poly) {
         for i in 0..=self.level {
