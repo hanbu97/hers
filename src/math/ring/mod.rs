@@ -383,4 +383,67 @@ impl Ring {
             self.sub_rings[i].m_form(&p1.coeffs[i], &mut p2.coeffs[i]);
         }
     }
+
+    // Shift evaluates p2 = p2<<<k coefficient-wise in the ring.
+    pub fn shift(&self, p1: &Poly, k: usize, p2: &mut Poly) {
+        for (src, dst) in p1.coeffs.iter().zip(p2.coeffs.iter_mut()) {
+            dst.copy_from_slice(src);
+            dst.rotate_left(k);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+
+    #[test]
+    fn test_new_ring() -> Result<()> {
+        // Test with invalid degree (not power of 2)
+        assert!(Ring::new(3, vec![97]).is_err());
+
+        // Test with empty moduli
+        assert!(Ring::new(16, vec![]).is_err());
+
+        // Test with non-distinct moduli
+        assert!(Ring::new(16, vec![97, 97]).is_err());
+
+        // Test with non-prime modulus
+        let ring = Ring::new(16, vec![4]);
+        assert!(ring.is_err());
+
+        // Test with non NTT-friendly modulus
+        let ring = Ring::new(16, vec![7]);
+        assert!(ring.is_err());
+
+        // Test with one NTT-friendly and one non NTT-friendly modulus
+        let ring = Ring::new(16, vec![97, 7]);
+        assert!(ring.is_err());
+
+        // Test with valid parameters
+        let ring = Ring::new(16, vec![97]);
+        assert!(ring.is_ok());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_shift() {
+        let r = Ring::new(16, vec![97]).unwrap();
+        let mut p1 = r.new_poly();
+        let mut p2 = r.new_poly();
+
+        // Initialize p1 with values 0 to 15
+        for i in 0..16 {
+            p1.coeffs[0][i] = i as u64;
+        }
+
+        r.shift(&p1, 3, &mut p2);
+
+        assert_eq!(
+            p2.coeffs[0],
+            vec![3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2]
+        );
+    }
 }

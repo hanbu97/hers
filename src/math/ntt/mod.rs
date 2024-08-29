@@ -29,8 +29,6 @@ impl NTTImplementations {
 mod test {
     use crate::math::ring::{polynomial::Poly, Ring};
 
-    // use super::*;
-
     struct TestCase {
         pub degree: u64,
         pub qis: Vec<u64>,
