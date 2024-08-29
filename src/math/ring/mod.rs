@@ -446,4 +446,100 @@ mod tests {
             vec![3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2]
         );
     }
+
+    struct Parameters {
+        pub log_n: u64,
+        pub qi: Vec<u64>,
+        pub pi: Vec<u64>,
+    }
+
+    const T: u64 = 0x3ee0001;
+    const DEFAULT_SIGMA: f64 = 3.2;
+    const DEFAULT_BOUND: f64 = 6.0 * DEFAULT_SIGMA;
+
+    // struct TestParams {
+    //     ring_q: Ring,
+    //     ring_p: Ring,
+    //     prng: PRNG,
+    //     uniform_sampler_q: UniformSampler,
+    //     uniform_sampler_p: UniformSampler,
+    // }
+
+    const QI60: [u64; 32] = [
+        0x1fffffffffe00001,
+        0x1fffffffffc80001,
+        0x1fffffffffb40001,
+        0x1fffffffff500001,
+        0x1fffffffff380001,
+        0x1fffffffff000001,
+        0x1ffffffffef00001,
+        0x1ffffffffee80001,
+        0x1ffffffffeb40001,
+        0x1ffffffffe780001,
+        0x1ffffffffe600001,
+        0x1ffffffffe4c0001,
+        0x1ffffffffdf40001,
+        0x1ffffffffdac0001,
+        0x1ffffffffda40001,
+        0x1ffffffffc680001,
+        0x1ffffffffc000001,
+        0x1ffffffffb880001,
+        0x1ffffffffb7c0001,
+        0x1ffffffffb300001,
+        0x1ffffffffb1c0001,
+        0x1ffffffffadc0001,
+        0x1ffffffffa400001,
+        0x1ffffffffa140001,
+        0x1ffffffff9d80001,
+        0x1ffffffff9140001,
+        0x1ffffffff8ac0001,
+        0x1ffffffff8a80001,
+        0x1ffffffff81c0001,
+        0x1ffffffff7800001,
+        0x1ffffffff7680001,
+        0x1ffffffff7080001,
+    ];
+
+    const PI60: [u64; 32] = [
+        0x1ffffffff6c80001,
+        0x1ffffffff6140001,
+        0x1ffffffff5f40001,
+        0x1ffffffff5700001,
+        0x1ffffffff4bc0001,
+        0x1ffffffff4380001,
+        0x1ffffffff3240001,
+        0x1ffffffff2dc0001,
+        0x1ffffffff1a40001,
+        0x1ffffffff11c0001,
+        0x1ffffffff0fc0001,
+        0x1ffffffff0d80001,
+        0x1ffffffff0c80001,
+        0x1ffffffff08c0001,
+        0x1fffffffefd00001,
+        0x1fffffffef9c0001,
+        0x1fffffffef600001,
+        0x1fffffffeef40001,
+        0x1fffffffeed40001,
+        0x1fffffffeed00001,
+        0x1fffffffeebc0001,
+        0x1fffffffed540001,
+        0x1fffffffed440001,
+        0x1fffffffed2c0001,
+        0x1fffffffed200001,
+        0x1fffffffec940001,
+        0x1fffffffec6c0001,
+        0x1fffffffebe80001,
+        0x1fffffffebac0001,
+        0x1fffffffeba40001,
+        0x1fffffffeb4c0001,
+        0x1fffffffeb280001,
+    ];
+
+    lazy_static::lazy_static! {
+        static ref TEST_PARAMETERS: Vec<Parameters> = vec![Parameters {
+            log_n: 10,
+            qi: QI60[QI60.len() - 14..].to_vec(),
+            pi: PI60[PI60.len() - 14..].to_vec(),
+        },];
+    }
 }
