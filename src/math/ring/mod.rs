@@ -3,7 +3,7 @@ use crate::math::ring::operations::compute_rescale_constants;
 use self::{errors::RingError, polynomial::Poly, subring::SubRing};
 use itertools::Itertools;
 use num_bigint::BigInt;
-use num_traits::{ToPrimitive, Zero};
+use num_traits::ToPrimitive;
 
 use super::ntt::{
     params::{NTTParameters, NTTTable},
@@ -19,7 +19,7 @@ pub mod subring;
 pub mod types;
 
 /// Ring is a structure that keeps all the variables required to operate on a polynomial represented in this ring.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Ring {
     /// SubRings for each level
     pub sub_rings: Vec<SubRing>,
@@ -56,6 +56,22 @@ impl Ring {
         )
     }
 
+    /// Returns the mask for the given level.
+    pub fn mask(&self, level: usize) -> u64 {
+        self.sub_rings[level].mask
+    }
+
+    /// Returns the ring at the given level.
+    pub fn at_level(&self, level: usize) -> Self {
+        Ring {
+            sub_rings: self.sub_rings[..=level].to_vec(),
+            modulus_at_level: self.modulus_at_level[..=level].to_vec(),
+            rescale_constants: self.rescale_constants[..=level].to_vec(),
+            level,
+        }
+    }
+
+    /// Creates a new Ring with a custom NTT implementation.    
     pub fn new_with_custom_ntt<F>(
         degree: u64,
         moduli: Vec<u64>,
