@@ -10,9 +10,15 @@ use crate::math::ring::{polynomial::Poly, Ring};
 /// Constant used in the Gaussian sampling algorithm
 const RN: f64 = 3.442619855899;
 
-pub struct GaussianSampler {
+// pub struct GaussianSampler {
+//     base_ring: Ring,
+//     prng: ChaCha20Rng,
+//     xe: DiscreteGaussian,
+//     montgomery: bool,
+// }
+pub struct GaussianSampler<R: RngCore + Clone> {
     base_ring: Ring,
-    prng: ChaCha20Rng,
+    prng: R,
     xe: DiscreteGaussian,
     montgomery: bool,
 }
@@ -23,11 +29,21 @@ pub struct DiscreteGaussian {
     pub bound: f64,
 }
 
-impl GaussianSampler {
-    pub fn new(seed: u64, base_ring: Ring, xe: DiscreteGaussian, montgomery: bool) -> Self {
+// impl GaussianSampler {
+// pub fn new(seed: u64, base_ring: Ring, xe: DiscreteGaussian, montgomery: bool) -> Self {
+//     GaussianSampler {
+//         base_ring,
+//         prng: ChaCha20Rng::seed_from_u64(seed),
+//         xe,
+//         montgomery,
+//     }
+// }
+
+impl<R: RngCore + Clone> GaussianSampler<R> {
+    pub fn new(prng: R, base_ring: Ring, xe: DiscreteGaussian, montgomery: bool) -> Self {
         GaussianSampler {
             base_ring,
-            prng: ChaCha20Rng::seed_from_u64(seed),
+            prng,
             xe,
             montgomery,
         }
@@ -145,10 +161,18 @@ impl GaussianSampler {
         self.read_inner(pol, |a, b, c| (a + b) % c);
     }
 
+    // pub fn at_level(&self, level: usize) -> Self {
+    //     GaussianSampler {
+    //         base_ring: self.base_ring.at_level(level),
+    //         prng: ChaCha20Rng::from_seed(self.prng.get_seed()),
+    //         xe: self.xe,
+    //         montgomery: self.montgomery,
+    //     }
+    // }
     pub fn at_level(&self, level: usize) -> Self {
         GaussianSampler {
             base_ring: self.base_ring.at_level(level),
-            prng: ChaCha20Rng::from_seed(self.prng.get_seed()),
+            prng: self.prng.clone(),
             xe: self.xe,
             montgomery: self.montgomery,
         }
@@ -439,6 +463,8 @@ const FN: [f32; 128] = [
 
 #[cfg(test)]
 mod tests {
+    use crate::utils::rand::fixed_rand::FixedRandom;
+
     use super::*;
 
     #[test]
@@ -449,7 +475,10 @@ mod tests {
             sigma: 3.2,
             bound: 19.2,
         };
-        let mut sampler = GaussianSampler::new(12345, ring, xe, false);
+        // let mut sampler = GaussianSampler::new(12345, ring, xe, false);
+
+        let prng = ChaCha20Rng::seed_from_u64(12345);
+        let mut sampler = GaussianSampler::new(prng, ring, xe, false);
 
         let pol = sampler.read_new();
 
@@ -461,5 +490,40 @@ mod tests {
         for coeff in &pol.coeffs[0] {
             assert!(*coeff < 0xffffffff00000001);
         }
+    }
+
+    #[test]
+    fn test_gaussian_sampler_consistency() {
+        // 从 Go 输出中获取的随机数序列
+        let random_numbers: Vec<u64> = vec![
+            3217959048, 1151957924, 461638112, 4016695731, 4271517878, 3021379901, 3097921250,
+            2111348812, 2420333506, 3717085845, 1826735290, 872499112, 2350638893, 3448608216,
+            2055766121, 2240574256,
+        ];
+        let fixed_rng = FixedRandom::new(random_numbers);
+
+        // 设置与 Go 测试相同的参数
+        let degree = 16;
+        let modulus = 97;
+        let sigma = 3.2;
+        let bound = 19.2;
+
+        let ring = Ring::new(degree, vec![modulus]).unwrap();
+        let xe = DiscreteGaussian { sigma, bound };
+        // let mut sampler = GaussianSampler::new(fixed_rng, ring, xe, false);
+        let mut sampler = GaussianSampler::new(fixed_rng, ring, xe, false);
+
+        let pol = sampler.read_new();
+
+        // 从 Go 输出中获取的预期结果
+        let expected_coeffs: Vec<u64> = vec![1, 95, 96, 4, 4, 2, 3, 92, 1, 2, 93, 95, 0, 4, 90, 0];
+
+        assert_eq!(
+            pol.coeffs[0], expected_coeffs,
+            "Sampled coefficients do not match Go implementation.\nExpected: {:?}\nGot: {:?}",
+            expected_coeffs, pol.coeffs[0]
+        );
+
+        println!("Sampled polynomial coefficients: {:?}", pol.coeffs[0]);
     }
 }
