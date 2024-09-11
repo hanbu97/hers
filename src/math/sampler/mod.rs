@@ -2,6 +2,7 @@ use blake3::Hasher;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
+pub mod gaussian_sampler;
 pub mod traits;
 pub mod uniform_sampler;
 

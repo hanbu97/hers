@@ -183,6 +183,7 @@ dependencies = [
  "primal",
  "rand",
  "rand_chacha",
+ "rand_core",
  "rug",
  "serde",
  "serde_json",
