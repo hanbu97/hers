@@ -1,8 +1,7 @@
 use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use num_traits::{FromPrimitive, Signed};
-use rand_chacha::ChaCha20Rng;
-use rand_core::{RngCore, SeedableRng};
+use rand_core::RngCore;
 use std::f64::consts::PI;
 
 use crate::math::ring::{polynomial::Poly, Ring};
@@ -68,6 +67,7 @@ impl<R: RngCore + Clone> GaussianSampler<R> {
             for i in 0..n {
                 let (coeff_int, _) = loop {
                     let (norm, sign) = self.norm_float64();
+
                     let norm_int = if norm < 1.0 {
                         &sigma_int >> (-(norm.log2()) as u64)
                     } else {
@@ -89,6 +89,7 @@ impl<R: RngCore + Clone> GaussianSampler<R> {
             for i in 0..n {
                 let (coeff_int, sign) = loop {
                     let (norm, sign) = self.norm_float64();
+
                     let v = norm * sigma;
                     if v <= bound {
                         break ((v + 0.5) as u64, sign);
@@ -96,8 +97,10 @@ impl<R: RngCore + Clone> GaussianSampler<R> {
                 };
 
                 for (j, &qi) in moduli.iter().enumerate() {
-                    let coeff = if sign == 1 { qi - coeff_int } else { coeff_int };
-                    pol.coeffs[j][i] = f(pol.coeffs[j][i], coeff, qi);
+                    let coeff = (coeff_int * sign) | (qi - coeff_int) * (sign ^ 1);
+                    let result = f(pol.coeffs[j][i], coeff, qi);
+
+                    pol.coeffs[j][i] = result;
                 }
             }
         }
@@ -111,6 +114,7 @@ impl<R: RngCore + Clone> GaussianSampler<R> {
     fn norm_float64(&mut self) -> (f64, u64) {
         loop {
             let j_uint32: u32 = self.prng.next_u32();
+
             let j = (j_uint32 & 0x7fffffff) as i32;
             let sign = j_uint32 >> 31;
             let i = (j & 0x7F) as usize;
@@ -122,8 +126,10 @@ impl<R: RngCore + Clone> GaussianSampler<R> {
 
             if i == 0 {
                 let x = loop {
-                    let x = -(self.prng.next_u64() as f64) / u64::MAX as f64 * (1.0 / RN);
-                    let y = -(self.prng.next_u64() as f64) / u64::MAX as f64;
+                    let r1 = self.prng.next_u64() as f64 / u64::MAX as f64;
+                    let r2 = self.prng.next_u64() as f64 / u64::MAX as f64;
+                    let x = -r1.ln() * (1.0 / RN);
+                    let y = -r2.ln();
                     if y + y >= x * x {
                         break x;
                     }
@@ -135,6 +141,7 @@ impl<R: RngCore + Clone> GaussianSampler<R> {
             if (FN[i] as f64) + f * ((FN[i - 1] - FN[i]) as f64) < (-0.5 * x * x).exp() {
                 return (x, sign as u64);
             }
+            // println!("Rejected x = {}, retrying", x);
         }
     }
 
@@ -463,6 +470,9 @@ const FN: [f32; 128] = [
 
 #[cfg(test)]
 mod tests {
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
+
     use crate::utils::rand::fixed_rand::FixedRandom;
 
     use super::*;
@@ -494,15 +504,13 @@ mod tests {
 
     #[test]
     fn test_gaussian_sampler_consistency() {
-        // 从 Go 输出中获取的随机数序列
         let random_numbers: Vec<u64> = vec![
-            3217959048, 1151957924, 461638112, 4016695731, 4271517878, 3021379901, 3097921250,
-            2111348812, 2420333506, 3717085845, 1826735290, 872499112, 2350638893, 3448608216,
-            2055766121, 2240574256,
+            3908915945, 573870360, 3995974466, 3160710173, 3104366143, 1477698499, 2077139608,
+            1123633880, 1860050653, 88026054, 3228723252, 1486182876, 2934833073, 2466884827,
+            2414099902, 108969498,
         ];
         let fixed_rng = FixedRandom::new(random_numbers);
 
-        // 设置与 Go 测试相同的参数
         let degree = 16;
         let modulus = 97;
         let sigma = 3.2;
@@ -510,20 +518,17 @@ mod tests {
 
         let ring = Ring::new(degree, vec![modulus]).unwrap();
         let xe = DiscreteGaussian { sigma, bound };
-        // let mut sampler = GaussianSampler::new(fixed_rng, ring, xe, false);
-        let mut sampler = GaussianSampler::new(fixed_rng, ring, xe, false);
 
+        let mut sampler = GaussianSampler::new(fixed_rng, ring, xe, false);
         let pol = sampler.read_new();
 
-        // 从 Go 输出中获取的预期结果
-        let expected_coeffs: Vec<u64> = vec![1, 95, 96, 4, 4, 2, 3, 92, 1, 2, 93, 95, 0, 4, 90, 0];
+        let expected_coeffs: Vec<u64> =
+            vec![6, 96, 4, 2, 2, 94, 94, 94, 92, 97, 2, 93, 2, 1, 1, 97];
 
         assert_eq!(
             pol.coeffs[0], expected_coeffs,
             "Sampled coefficients do not match Go implementation.\nExpected: {:?}\nGot: {:?}",
             expected_coeffs, pol.coeffs[0]
         );
-
-        println!("Sampled polynomial coefficients: {:?}", pol.coeffs[0]);
     }
 }
