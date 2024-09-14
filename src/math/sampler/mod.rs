@@ -2,8 +2,10 @@ use blake3::Hasher;
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
-pub mod gaussian_sampler;
 pub mod traits;
+
+pub mod gaussian_sampler;
+pub mod ternary_sampler;
 pub mod uniform_sampler;
 
 use std::io;

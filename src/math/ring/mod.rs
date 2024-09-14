@@ -19,7 +19,7 @@ pub mod subring;
 pub mod types;
 
 /// Ring is a structure that keeps all the variables required to operate on a polynomial represented in this ring.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Debug)]
 pub struct Ring {
     /// SubRings for each level
     pub sub_rings: Vec<SubRing>,
@@ -399,6 +399,13 @@ impl Ring {
             self.sub_rings[i].m_form(&p1.coeffs[i], &mut p2.coeffs[i]);
         }
     }
+
+    /// Evaluates p2 = p1 * (2^64)^-1 coefficient-wise in the ring.
+    // pub fn m_form_out(&self, p1: &Poly) -> Poly {
+    //     let mut p2 = self.new_poly();
+    //     self.m_form(p1, &mut p2);
+    //     p2
+    // }
 
     // Shift evaluates p2 = p2<<<k coefficient-wise in the ring.
     pub fn shift(&self, p1: &Poly, k: usize, p2: &mut Poly) {
