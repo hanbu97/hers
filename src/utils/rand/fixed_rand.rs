@@ -4,11 +4,16 @@ use rand_core::{RngCore, SeedableRng};
 pub struct FixedRandom {
     values: Vec<u64>,
     index: usize,
+    pub count: usize,
 }
 
 impl FixedRandom {
     pub fn new(values: Vec<u64>) -> Self {
-        FixedRandom { values, index: 0 }
+        FixedRandom {
+            values,
+            index: 0,
+            count: 0,
+        }
     }
 }
 
@@ -24,10 +29,16 @@ impl RngCore for FixedRandom {
     }
 
     fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.count += 1;
         for chunk in dest.chunks_mut(8) {
             let value = self.next_u64().to_le_bytes();
             chunk.copy_from_slice(&value[..chunk.len()]);
         }
+
+        println!(
+            "------------------------- count: {} ------------------------- ",
+            self.count
+        );
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {
@@ -43,6 +54,7 @@ impl SeedableRng for FixedRandom {
         FixedRandom {
             values: Vec::new(),
             index: 0,
+            count: 0,
         }
     }
 }
