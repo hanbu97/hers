@@ -182,27 +182,35 @@ impl<R: RngCore + Clone> TernarySampler<R> {
 
             println!(
                 "random_bytes: {:?}",
-                &random_bytes[random_bytes.len() - 20..]
+                &random_bytes[random_bytes.len() - 20..].iter().join(" ")
             );
 
             let mut pointer = 0u8;
             let mut byte_pointer = 0;
 
             for i in 0..n {
+                if i % 100 == 0 {
+                    println!(
+                        "i: {}, pointer: {}, byte_pointer: {}, n: {}",
+                        i, pointer, byte_pointer, n
+                    );
+                }
+
                 let (coeff, sign, new_bytes, new_pointer, new_byte_pointer) =
                     self.kysampling(&mut random_bytes, pointer, byte_pointer, n);
+
+                // if i % 100 == 0 {
+                //     println!(
+                //         "i: {}, coeff: {}, sign: {}, new_pointer: {}, new_byte_pointer: {}",
+                //         i, coeff, sign, new_pointer, new_byte_pointer
+                //     );
+                // }
+
                 random_bytes = new_bytes;
                 pointer = new_pointer;
                 byte_pointer = new_byte_pointer;
 
                 let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
-
-                if i % 100 == 0 {
-                    println!(
-                        "i: {}, coeff: {}, sign: {}, index: {}",
-                        i, coeff, sign, index
-                    );
-                }
 
                 for (j, &qi) in moduli.iter().enumerate() {
                     pol.coeffs[j][i] =
