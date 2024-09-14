@@ -34,11 +34,6 @@ impl RngCore for FixedRandom {
             let value = self.next_u64().to_le_bytes();
             chunk.copy_from_slice(&value[..chunk.len()]);
         }
-
-        println!(
-            "------------------------- count: {} ------------------------- ",
-            self.count
-        );
     }
 
     fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand_core::Error> {

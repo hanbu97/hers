@@ -1,6 +1,4 @@
-use itertools::Itertools;
 use rand_core::RngCore;
-use std::f64::consts::E;
 
 use crate::math::ring::{polynomial::Poly, Ring};
 
@@ -23,8 +21,6 @@ pub enum Ternary {
 
 impl<R: RngCore + Clone> TernarySampler<R> {
     pub fn new(prng: R, base_ring: Ring, x: Ternary, montgomery: bool) -> Result<Self, String> {
-        println!("Creating new TernarySampler");
-        println!("montgomery: {}", montgomery);
         let mut ts = TernarySampler {
             base_ring,
             prng,
@@ -40,8 +36,6 @@ impl<R: RngCore + Clone> TernarySampler<R> {
         match x {
             Ternary::Probability(p) if p != 0.0 => {
                 ts.inv_density = 1.0 - p;
-
-                println!("Probability: {}, inv_density: {}", p, ts.inv_density);
 
                 if ts.inv_density != 0.5 {
                     ts.compute_matrix_ternary(ts.inv_density);
@@ -128,16 +122,23 @@ impl<R: RngCore + Clone> TernarySampler<R> {
     }
 
     fn compute_matrix_ternary(&mut self, p: f64) {
-        let g1 = p * E.powi(TERNARY_SAMPLER_PRECISION as i32);
-        let x1 = g1 as u64;
+        let mut g: f64;
+        let mut x: u64;
+
+        g = p;
+        g *= 2f64.powi(TERNARY_SAMPLER_PRECISION as i32);
+        x = g as u64;
+
         for j in 0..TERNARY_SAMPLER_PRECISION - 1 {
-            self.matrix_proba[0][j] = ((x1 >> (TERNARY_SAMPLER_PRECISION - j - 1)) & 1) as u8;
+            self.matrix_proba[0][j] = ((x >> (TERNARY_SAMPLER_PRECISION - j - 1)) & 1) as u8;
         }
 
-        let g2 = (1.0 - p) * E.powi(TERNARY_SAMPLER_PRECISION as i32);
-        let x2 = g2 as u64;
+        g = 1.0 - p;
+        g *= 2f64.powi(TERNARY_SAMPLER_PRECISION as i32);
+        x = g as u64;
+
         for j in 0..TERNARY_SAMPLER_PRECISION - 1 {
-            self.matrix_proba[1][j] = ((x2 >> (TERNARY_SAMPLER_PRECISION - j - 1)) & 1) as u8;
+            self.matrix_proba[1][j] = ((x >> (TERNARY_SAMPLER_PRECISION - j - 1)) & 1) as u8;
         }
     }
 
@@ -145,14 +146,27 @@ impl<R: RngCore + Clone> TernarySampler<R> {
     where
         F: Fn(u64, u64, u64) -> u64,
     {
-        println!("Entering sample_proba");
-        println!("inv_density: {}", self.inv_density);
-
         let n = self.base_ring.degree() as usize;
         let moduli = self.base_ring.moduli_chain();
 
         if self.inv_density == 0.5 {
-            // ... [Keep the existing code for inv_density == 0.5] ...
+            let mut random_bytes_coeffs = vec![0u8; n >> 3];
+            let mut random_bytes_sign = vec![0u8; n >> 3];
+            self.prng.fill_bytes(&mut random_bytes_coeffs);
+            self.prng.fill_bytes(&mut random_bytes_sign);
+
+            for i in 0..n {
+                let coeff = (random_bytes_coeffs[i >> 3] >> (i & 7)) & 1;
+                let sign = (random_bytes_sign[i >> 3] >> (i & 7)) & 1;
+                let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
+
+                for (j, &qi) in moduli.iter().enumerate() {
+                    let old_value = pol.coeffs[j][i];
+                    let lut_value = self.matrix_values[j][index as usize];
+                    let new_value = f(old_value, lut_value, qi);
+                    pol.coeffs[j][i] = new_value;
+                }
+            }
         } else {
             let mut random_bytes = vec![0u8; n];
             self.prng.fill_bytes(&mut random_bytes);
@@ -161,13 +175,6 @@ impl<R: RngCore + Clone> TernarySampler<R> {
             let mut byte_pointer = 0;
 
             for i in 0..n {
-                if i < 5 {
-                    println!(
-                        "i: {}, pointer: {}, byte_pointer: {}, n: {}",
-                        i, pointer, byte_pointer, n
-                    );
-                }
-
                 let (coeff, sign, new_bytes, new_pointer, new_byte_pointer) =
                     self.kysampling(&mut random_bytes, pointer, byte_pointer, n);
 
@@ -239,32 +246,35 @@ impl<R: RngCore + Clone> TernarySampler<R> {
         mut byte_pointer: usize,
         byte_length: usize,
     ) -> (u64, u64, Vec<u8>, u8, usize) {
-        let mut d = 0;
-        let mut col = 0;
+        let mut d: i32 = 0;
+        let mut col: usize = 0;
         let col_len = self.matrix_proba.len();
 
         loop {
-            while pointer < 8 {
-                d = (d << 1) + 1 - ((random_bytes[byte_pointer] >> pointer) & 1) as i32;
+            for i in pointer..8 {
+                d = (d << 1) + 1 - ((random_bytes[byte_pointer] >> i) & 1) as i32;
 
-                if d > col_len as i32 - 1 {
-                    return self.kysampling(random_bytes, pointer, byte_pointer, byte_length);
+                if d > (col_len - 1) as i32 {
+                    return self.kysampling(random_bytes, i, byte_pointer, byte_length);
                 }
 
                 for row in (0..col_len).rev() {
                     d -= self.matrix_proba[row][col] as i32;
 
                     if d == -1 {
-                        let sign = if pointer == 7 {
+                        let sign = if i == 7 {
                             pointer = 0;
                             byte_pointer += 1;
+
                             if byte_pointer >= byte_length {
                                 byte_pointer = 0;
                                 self.prng.fill_bytes(random_bytes);
                             }
+
                             random_bytes[byte_pointer] & 1
                         } else {
-                            (random_bytes[byte_pointer] >> (pointer + 1)) & 1
+                            pointer = i;
+                            (random_bytes[byte_pointer] >> (i + 1)) & 1
                         };
 
                         return (
@@ -278,11 +288,11 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 }
 
                 col += 1;
-                pointer += 1;
             }
 
             pointer = 0;
             byte_pointer += 1;
+
             if byte_pointer >= byte_length {
                 byte_pointer = 0;
                 self.prng.fill_bytes(random_bytes);
@@ -305,26 +315,132 @@ mod tests {
     // use rand::SeedableRng;
     // use rand_chacha::ChaCha20Rng;
 
-    #[test]
-    fn test_ternary_sampler_consistency() {
-        let random_numbers_prob: Vec<u64> = vec![14979877486494237012];
+    // #[test]
+    // fn test_ternary_sampler_probability() {
+    //     let degree = 16 as usize;
+    //     let modulus = 97u64;
+    //     let p = 0.3;
+    //     let montgomery = false;
 
+    //     let ring = Ring::new(degree as u64, vec![modulus]).unwrap();
+    //     let prng = ChaCha20Rng::seed_from_u64(12345);
+
+    //     let mut sampler =
+    //         TernarySampler::new(prng, ring, Ternary::Probability(p), montgomery).unwrap();
+    //     let pol = sampler.read_new();
+
+    //     // test degree of polynomial
+    //     assert_eq!(pol.coeffs[0].len(), degree);
+
+    //     // test coefficients are within bounds
+    //     for &coeff in &pol.coeffs[0] {
+    //         assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
+    //     }
+
+    //     // test number of non-zero coefficients
+    //     let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
+    //     let expected_non_zero = (degree as f64 * (1.0 - p)).round() as usize;
+    //     assert!((non_zero_count as i32 - expected_non_zero as i32).abs() <= 3); // 允许一些偏差
+    // }
+
+    // #[test]
+    // fn test_ternary_sampler_hamming_weight() {
+    //     let degree = 16;
+    //     let modulus = 97u64;
+    //     let hw = 5;
+    //     let montgomery = false;
+
+    //     let ring = Ring::new(degree, vec![modulus]).unwrap();
+    //     let prng = ChaCha20Rng::seed_from_u64(12345);
+
+    //     let mut sampler =
+    //         TernarySampler::new(prng, ring, Ternary::HammingWeight(hw), montgomery).unwrap();
+    //     let pol = sampler.read_new();
+
+    //     // test degree of polynomial
+    //     assert_eq!(pol.coeffs[0].len(), degree as usize);
+
+    //     // test coefficients are within bounds
+    //     for &coeff in &pol.coeffs[0] {
+    //         assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
+    //     }
+
+    //     // test number of non-zero coefficients
+    //     let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
+    //     assert_eq!(non_zero_count, hw);
+    // }
+
+    #[test]
+    fn test_ternary_sampler_consistency_hamming_weight() {
         let log_n = 10;
         let qi: Vec<u64> = vec![
             2305843009137934337,
-            // 2305843009132953601,
-            // 2305843009131642881,
-            // 2305843009127448577,
-            // 2305843009117224961,
-            // 2305843009114341377,
-            // 2305843009110409217,
-            // 2305843009097564161,
-            // 2305843009090748417,
-            // 2305843009090486273,
-            // 2305843009081311233,
-            // 2305843009071087617,
-            // 2305843009069514753,
-            // 2305843009063223297,
+            2305843009132953601,
+            2305843009131642881,
+            2305843009127448577,
+            2305843009117224961,
+            2305843009114341377,
+            2305843009110409217,
+            2305843009097564161,
+            2305843009090748417,
+            2305843009090486273,
+            2305843009081311233,
+            2305843009071087617,
+            2305843009069514753,
+            2305843009063223297,
+        ];
+
+        let ring = Ring::new(1 << log_n, qi).unwrap();
+
+        let rands: Vec<u64> = vec![17969798196178076256, 11665707709819759989];
+
+        let fixed_rng = FixedRandom::new(rands);
+
+        let mut sampler =
+            TernarySampler::new(fixed_rng, ring, Ternary::HammingWeight(128), false).unwrap();
+
+        let pol = sampler.read_new();
+
+        // 这里的 expected_coeffs 需要从 Go 测试输出中获取
+        let expected_coeffs: Vec<u64> = vec![
+            // 在这里填入 Go 测试中 "Sampled polynomial coefficients (Hamming Weight)" 的输出
+        ];
+
+        println!("{:?}", pol.coeffs[0]);
+
+        // assert_eq!(
+        //     pol.coeffs[0], expected_coeffs,
+        //     "Sampled coefficients do not match Go implementation for Hamming weight distribution.\nExpected: {:?}\nGot: {:?}",
+        //     expected_coeffs, pol.coeffs[0]
+        // );
+
+        // // 验证 Hamming weight
+        // let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
+        // assert_eq!(
+        //     non_zero_count, 128,
+        //     "Expected Hamming weight 128, but got {}",
+        //     non_zero_count
+        // );
+    }
+
+    #[test]
+    fn test_ternary_sampler_consistency() {
+        let log_n = 10;
+        let qi: Vec<u64> = vec![
+            2305843009137934337,
+            2305843009132953601,
+            2305843009131642881,
+            2305843009127448577,
+            2305843009117224961,
+            2305843009114341377,
+            2305843009110409217,
+            2305843009097564161,
+            2305843009090748417,
+            2305843009090486273,
+            2305843009081311233,
+            2305843009071087617,
+            2305843009069514753,
+            2305843009063223297,
         ];
 
         let ring = Ring::new(1 << log_n, qi).unwrap();
@@ -461,129 +577,1042 @@ mod tests {
         ];
 
         let fixed_rng = FixedRandom::new(rands);
-        // let fixed_rng = FixedRandom::new(random_numbers_prob);
-        // let fixed_rng = FixedRandom1::new(10203421957101150929);
 
         let mut sampler =
             TernarySampler::new(fixed_rng, ring, Ternary::Probability(1.0 / 3.0), true).unwrap();
         let pol = sampler.read_new();
 
-        // 这里的 expected_coeffs 需要从 Go 测试输出中获取
         let expected_coeffs: Vec<u64> = vec![
-            // 在这里填入 Go 测试中 "polynomial coefficients (Probability)" 的输出
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            606076920,
+            606076920,
+            606076920,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            606076920,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            606076920,
+            0,
+            606076920,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            606076920,
+            606076920,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            606076920,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            606076920,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            606076920,
+            606076920,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            606076920,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            2305843008531857417,
+            0,
+            0,
+            0,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            606076920,
+            0,
+            0,
+            0,
+            2305843008531857417,
+            0,
+            606076920,
+            2305843008531857417,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            606076920,
+            606076920,
+            2305843008531857417,
+            0,
+            0,
+            0,
         ];
 
-        // println!("polynomial coefficients (Probability): {:?}", pol.coeffs[0]);
-
-        // assert_eq!(
-        //     pol.coeffs[0], expected_coeffs,
-        //     "Sampled coefficients do not match Go implementation for probability distribution.\nExpected: {:?}\nGot: {:?}",
-        //     expected_coeffs, pol.coeffs[0]
-        // );
+        assert_eq!(
+            pol.coeffs[0], expected_coeffs,
+            "Sampled coefficients do not match Go implementation for probability distribution.\nExpected: {:?}\nGot: {:?}",
+            expected_coeffs, pol.coeffs[0]
+        );
     }
-
-    // #[test]
-    // fn test_ternary_sampler_probability() {
-    //     let degree = 16 as usize;
-    //     let modulus = 97u64;
-    //     let p = 0.3;
-    //     let montgomery = false;
-
-    //     let ring = Ring::new(degree as u64, vec![modulus]).unwrap();
-    //     let prng = ChaCha20Rng::seed_from_u64(12345);
-
-    //     let mut sampler =
-    //         TernarySampler::new(prng, ring, Ternary::Probability(p), montgomery).unwrap();
-    //     let pol = sampler.read_new();
-
-    //     // test degree of polynomial
-    //     assert_eq!(pol.coeffs[0].len(), degree);
-
-    //     // test coefficients are within bounds
-    //     for &coeff in &pol.coeffs[0] {
-    //         assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
-    //     }
-
-    //     // test number of non-zero coefficients
-    //     let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
-    //     let expected_non_zero = (degree as f64 * (1.0 - p)).round() as usize;
-    //     assert!((non_zero_count as i32 - expected_non_zero as i32).abs() <= 3); // 允许一些偏差
-    // }
-
-    // #[test]
-    // fn test_ternary_sampler_hamming_weight() {
-    //     let degree = 16;
-    //     let modulus = 97u64;
-    //     let hw = 5;
-    //     let montgomery = false;
-
-    //     let ring = Ring::new(degree, vec![modulus]).unwrap();
-    //     let prng = ChaCha20Rng::seed_from_u64(12345);
-
-    //     let mut sampler =
-    //         TernarySampler::new(prng, ring, Ternary::HammingWeight(hw), montgomery).unwrap();
-    //     let pol = sampler.read_new();
-
-    //     // test degree of polynomial
-    //     assert_eq!(pol.coeffs[0].len(), degree as usize);
-
-    //     // test coefficients are within bounds
-    //     for &coeff in &pol.coeffs[0] {
-    //         assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
-    //     }
-
-    //     // test number of non-zero coefficients
-    //     let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
-    //     assert_eq!(non_zero_count, hw);
-    // }
-
-    // #[test]
-    // fn test_ternary_sampler_consistency_hamming_weight() {
-    //     let log_n = 10;
-    //     let qi: Vec<u64> = vec![
-    //         2305843009137934337,
-    //         2305843009132953601,
-    //         2305843009131642881,
-    //         2305843009127448577,
-    //         2305843009117224961,
-    //         2305843009114341377,
-    //         2305843009110409217,
-    //         2305843009097564161,
-    //         2305843009090748417,
-    //         2305843009090486273,
-    //         2305843009081311233,
-    //         2305843009071087617,
-    //         2305843009069514753,
-    //         2305843009063223297,
-    //     ];
-
-    //     let ring = Ring::new(1 << log_n, qi).unwrap();
-
-    //     let random_numbers_hw: Vec<u64> = vec![12633818882151087297];
-
-    //     let fixed_rng = FixedRandom::new(random_numbers_hw);
-    //     let mut sampler =
-    //         TernarySampler::new(fixed_rng, ring, Ternary::HammingWeight(128), false).unwrap();
-
-    //     let pol = sampler.read_new();
-
-    //     // 这里的 expected_coeffs 需要从 Go 测试输出中获取
-    //     let expected_coeffs: Vec<u64> = vec![
-    //         // 在这里填入 Go 测试中 "Sampled polynomial coefficients (Hamming Weight)" 的输出
-    //     ];
-
-    //     assert_eq!(
-    //         pol.coeffs[0], expected_coeffs,
-    //         "Sampled coefficients do not match Go implementation for Hamming weight distribution.\nExpected: {:?}\nGot: {:?}",
-    //         expected_coeffs, pol.coeffs[0]
-    //     );
-
-    //     // 验证 Hamming weight
-    //     let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
-    //     assert_eq!(
-    //         non_zero_count, 128,
-    //         "Expected Hamming weight 128, but got {}",
-    //         non_zero_count
-    //     );
-    // }
 }
