@@ -180,11 +180,6 @@ impl<R: RngCore + Clone> TernarySampler<R> {
             let mut random_bytes = vec![0u8; n];
             self.prng.fill_bytes(&mut random_bytes);
 
-            println!(
-                "random_bytes: {:?}",
-                &random_bytes[random_bytes.len() - 20..].iter().join(" ")
-            );
-
             let mut pointer = 0u8;
             let mut byte_pointer = 0;
 
@@ -199,12 +194,12 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 let (coeff, sign, new_bytes, new_pointer, new_byte_pointer) =
                     self.kysampling(&mut random_bytes, pointer, byte_pointer, n);
 
-                // if i % 100 == 0 {
-                //     println!(
-                //         "i: {}, coeff: {}, sign: {}, new_pointer: {}, new_byte_pointer: {}",
-                //         i, coeff, sign, new_pointer, new_byte_pointer
-                //     );
-                // }
+                if i % 100 == 0 {
+                    println!(
+                        "i: {}, coeff: {}, sign: {}, new_pointer: {}, new_byte_pointer: {}",
+                        i, coeff, sign, new_pointer, new_byte_pointer
+                    );
+                }
 
                 random_bytes = new_bytes;
                 pointer = new_pointer;
