@@ -22,6 +22,8 @@ pub enum Ternary {
 
 impl<R: RngCore + Clone> TernarySampler<R> {
     pub fn new(prng: R, base_ring: Ring, x: Ternary, montgomery: bool) -> Result<Self, String> {
+        println!("Creating new TernarySampler");
+        println!("montgomery: {}", montgomery);
         let mut ts = TernarySampler {
             base_ring,
             prng,
@@ -37,6 +39,9 @@ impl<R: RngCore + Clone> TernarySampler<R> {
         match x {
             Ternary::Probability(p) if p != 0.0 => {
                 ts.inv_density = 1.0 - p;
+
+                println!("Probability: {}, inv_density: {}", p, ts.inv_density);
+
                 if ts.inv_density != 0.5 {
                     ts.compute_matrix_ternary(ts.inv_density);
                 }
@@ -139,6 +144,9 @@ impl<R: RngCore + Clone> TernarySampler<R> {
     where
         F: Fn(u64, u64, u64) -> u64,
     {
+        println!("Entering sample_proba");
+        println!("inv_density: {}", self.inv_density);
+
         if self.inv_density == 0.0 {
             panic!("cannot sample -> p = 0");
         }
@@ -152,17 +160,36 @@ impl<R: RngCore + Clone> TernarySampler<R> {
             self.prng.fill_bytes(&mut random_bytes_coeffs);
             self.prng.fill_bytes(&mut random_bytes_sign);
 
+            println!("random_bytes_coeffs: {:?}", random_bytes_coeffs);
+            println!("random_bytes_sign: {:?}", random_bytes_sign);
+
             for i in 0..n {
                 let coeff = (random_bytes_coeffs[i as usize >> 3] >> (i & 7)) & 1;
                 let sign = (random_bytes_sign[i as usize >> 3] >> (i & 7)) & 1;
                 let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
 
+                // for (j, &qi) in moduli.iter().enumerate() {
+                //     pol.coeffs[j][i as usize] = f(
+                //         pol.coeffs[j][i as usize],
+                //         self.matrix_values[j][index as usize],
+                //         qi,
+                //     );
+                // }
                 for (j, &qi) in moduli.iter().enumerate() {
-                    pol.coeffs[j][i as usize] = f(
-                        pol.coeffs[j][i as usize],
-                        self.matrix_values[j][index as usize],
-                        qi,
-                    );
+                    let old_value = pol.coeffs[j][i as usize];
+                    let lut_value = self.matrix_values[j][index as usize];
+                    let new_value = f(old_value, lut_value, qi);
+                    pol.coeffs[j][i as usize] = new_value;
+
+                    if i < 5 {
+                        println!("Coefficient {}, Modulus {}:", i, j);
+                        println!("  coeff: {}, sign: {}, index: {}", coeff, sign, index);
+                        println!(
+                            "  oldValue: {}, lutValue: {}, qi: {}",
+                            old_value, lut_value, qi
+                        );
+                        println!("  newValue: {}\n", new_value);
+                    }
                 }
             }
         } else {
@@ -180,12 +207,28 @@ impl<R: RngCore + Clone> TernarySampler<R> {
 
                 let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
 
+                // for (j, &qi) in moduli.iter().enumerate() {
+                //     pol.coeffs[j][i as usize] = f(
+                //         pol.coeffs[j][i as usize],
+                //         self.matrix_values[j][index as usize],
+                //         qi,
+                //     );
+                // }
                 for (j, &qi) in moduli.iter().enumerate() {
-                    pol.coeffs[j][i as usize] = f(
-                        pol.coeffs[j][i as usize],
-                        self.matrix_values[j][index as usize],
-                        qi,
-                    );
+                    let old_value = pol.coeffs[j][i as usize];
+                    let lut_value = self.matrix_values[j][index as usize];
+                    let new_value = f(old_value, lut_value, qi);
+                    pol.coeffs[j][i as usize] = new_value;
+
+                    if i < 5 {
+                        println!("Coefficient {}, Modulus {}:", i, j);
+                        println!("  coeff: {}, sign: {}, index: {}", coeff, sign, index);
+                        println!(
+                            "  oldValue: {}, lutValue: {}, qi: {}",
+                            old_value, lut_value, qi
+                        );
+                        println!("  newValue: {}\n", new_value);
+                    }
                 }
             }
         }
@@ -371,61 +414,45 @@ mod tests {
 
     #[test]
     fn test_ternary_sampler_consistency() {
-        let random_numbers_prob: Vec<u64> = vec![11718380973907427976];
+        let random_numbers_prob: Vec<u64> = vec![5977113081384467726];
 
         let log_n = 10;
         let qi: Vec<u64> = vec![
             2305843009137934337,
-            2305843009132953601,
-            2305843009131642881,
-            2305843009127448577,
-            2305843009117224961,
-            2305843009114341377,
-            2305843009110409217,
-            2305843009097564161,
-            2305843009090748417,
-            2305843009090486273,
-            2305843009081311233,
-            2305843009071087617,
-            2305843009069514753,
-            2305843009063223297,
+            // 2305843009132953601,
+            // 2305843009131642881,
+            // 2305843009127448577,
+            // 2305843009117224961,
+            // 2305843009114341377,
+            // 2305843009110409217,
+            // 2305843009097564161,
+            // 2305843009090748417,
+            // 2305843009090486273,
+            // 2305843009081311233,
+            // 2305843009071087617,
+            // 2305843009069514753,
+            // 2305843009063223297,
         ];
 
         let ring = Ring::new(1 << log_n, qi).unwrap();
 
-        {
-            let fixed_rng = FixedRandom::new(random_numbers_prob);
-            let mut sampler = TernarySampler::new(
-                fixed_rng,
-                ring.clone(),
-                Ternary::Probability(1.0 / 3.0),
-                true,
-            )
-            .unwrap();
-            let pol = sampler.read_new();
+        let fixed_rng = FixedRandom::new(random_numbers_prob);
+        let mut sampler =
+            TernarySampler::new(fixed_rng, ring, Ternary::Probability(1.0 / 3.0), true).unwrap();
+        let pol = sampler.read_new();
 
-            // 这里的 expected_coeffs 需要从 Go 测试输出中获取
-            let expected_coeffs: Vec<u64> = vec![
-                // 在这里填入 Go 测试中 "polynomial coefficients (Probability)" 的输出
-            ];
+        // 这里的 expected_coeffs 需要从 Go 测试输出中获取
+        let expected_coeffs: Vec<u64> = vec![
+            // 在这里填入 Go 测试中 "polynomial coefficients (Probability)" 的输出
+        ];
 
-            println!(
-                "polynomial coefficients (Probability): length: {:#?}",
-                pol.coeffs.len()
-            );
+        println!("polynomial coefficients (Probability): {:?}", pol.coeffs[0]);
 
-            assert_eq!(
-                pol.coeffs[0], expected_coeffs,
-                "Sampled coefficients do not match Go implementation for probability distribution.\nExpected: {:?}\nGot: {:?}",
-                expected_coeffs, pol.coeffs[0]
-            );
-
-            // let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
-            // println!(
-            //     "Number of non-zero coefficients (Probability): {}",
-            //     non_zero_count
-            // );
-        }
+        assert_eq!(
+            pol.coeffs[0], expected_coeffs,
+            "Sampled coefficients do not match Go implementation for probability distribution.\nExpected: {:?}\nGot: {:?}",
+            expected_coeffs, pol.coeffs[0]
+        );
     }
 
     #[test]
