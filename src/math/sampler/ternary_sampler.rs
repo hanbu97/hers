@@ -162,12 +162,12 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 let sign = (random_bytes_sign[i >> 3] >> (i & 7)) & 1;
                 let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
 
-                if i % 100 == 0 {
-                    println!(
-                        "i: {}, coeff: {}, sign: {}, index: {}",
-                        i, coeff, sign, index
-                    );
-                }
+                // if i % 100 == 0 {
+                //     println!(
+                //         "i: {}, coeff: {}, sign: {}, index: {}",
+                //         i, coeff, sign, index
+                //     );
+                // }
 
                 for (j, &qi) in moduli.iter().enumerate() {
                     let old_value = pol.coeffs[j][i];
@@ -184,7 +184,7 @@ impl<R: RngCore + Clone> TernarySampler<R> {
             let mut byte_pointer = 0;
 
             for i in 0..n {
-                if i % 100 == 0 {
+                if i < 5 {
                     println!(
                         "i: {}, pointer: {}, byte_pointer: {}, n: {}",
                         i, pointer, byte_pointer, n
@@ -194,16 +194,16 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 let (coeff, sign, new_bytes, new_pointer, new_byte_pointer) =
                     self.kysampling(&mut random_bytes, pointer, byte_pointer, n);
 
-                if i % 100 == 0 {
-                    println!(
-                        "i: {}, coeff: {}, sign: {}, new_pointer: {}, new_byte_pointer: {}",
-                        i, coeff, sign, new_pointer, new_byte_pointer
-                    );
-                }
-
                 random_bytes = new_bytes;
                 pointer = new_pointer;
                 byte_pointer = new_byte_pointer;
+
+                // if i % 100 == 0 {
+                //     println!(
+                //         "After kysampling - i: {}, coeff: {}, sign: {}, pointer: {}, byte_pointer: {}",
+                //         i, coeff, sign, pointer, byte_pointer
+                //     );
+                // }
 
                 let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
 
@@ -265,60 +265,66 @@ impl<R: RngCore + Clone> TernarySampler<R> {
     fn kysampling(
         &mut self,
         random_bytes: &mut Vec<u8>,
-        pointer: u8,
-        byte_pointer: usize,
+        mut pointer: u8,
+        mut byte_pointer: usize,
         byte_length: usize,
     ) -> (u64, u64, Vec<u8>, u8, usize) {
         let mut d = 0;
         let mut col = 0;
         let col_len = self.matrix_proba.len();
-        let mut current_pointer = pointer;
-        let mut current_byte_pointer = byte_pointer;
 
         loop {
-            for i in current_pointer..8 {
-                d = (d << 1) + 1 - ((random_bytes[current_byte_pointer] >> i) & 1) as i32;
+            // Use one random byte per cycle and cycle through the randomBytes
+            while pointer < 8 {
+                d = (d << 1) + 1 - ((random_bytes[byte_pointer] >> pointer) & 1) as i32;
 
+                // There is small probability that it will get out of the bound, then
+                // rerun until it gets a proper output
                 if d > col_len as i32 - 1 {
-                    self.prng.fill_bytes(random_bytes);
-                    return self.kysampling(random_bytes, 0, 0, byte_length);
+                    return self.kysampling(random_bytes, pointer, byte_pointer, byte_length);
                 }
 
                 for row in (0..col_len).rev() {
                     d -= self.matrix_proba[row][col] as i32;
 
                     if d == -1 {
-                        let sign = if i == 7 {
-                            current_pointer = 0;
-                            current_byte_pointer += 1;
-                            if current_byte_pointer >= byte_length {
-                                current_byte_pointer = 0;
+                        let sign = if pointer == 7 {
+                            pointer = 0;
+                            // If the last bit of the array was read, sample a new one
+                            byte_pointer += 1;
+
+                            if byte_pointer >= byte_length {
+                                byte_pointer = 0;
                                 self.prng.fill_bytes(random_bytes);
                             }
-                            random_bytes[current_byte_pointer] & 1
+
+                            random_bytes[byte_pointer] & 1
                         } else {
-                            current_pointer = i;
-                            (random_bytes[current_byte_pointer] >> (i + 1)) & 1
+                            // Otherwise, the sign is the next bit of the byte
+                            (random_bytes[byte_pointer] >> (pointer + 1)) & 1
                         };
 
                         return (
                             row as u64,
                             sign as u64,
                             random_bytes.to_vec(),
-                            current_pointer + 1,
-                            current_byte_pointer,
+                            pointer + 1,
+                            byte_pointer,
                         );
                     }
                 }
 
                 col += 1;
+                pointer += 1;
             }
 
-            current_pointer = 0;
-            current_byte_pointer += 1;
+            // Reset the bit pointer and discard the used byte
+            pointer = 0;
+            // If the last bit of the array was read, sample a new one
+            byte_pointer += 1;
 
-            if current_byte_pointer >= byte_length {
-                current_byte_pointer = 0;
+            if byte_pointer >= byte_length {
+                byte_pointer = 0;
                 self.prng.fill_bytes(random_bytes);
             }
         }
