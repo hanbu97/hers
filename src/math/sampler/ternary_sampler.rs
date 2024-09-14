@@ -162,21 +162,18 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 let sign = (random_bytes_sign[i >> 3] >> (i & 7)) & 1;
                 let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
 
+                if i % 100 == 0 {
+                    println!(
+                        "i: {}, coeff: {}, sign: {}, index: {}",
+                        i, coeff, sign, index
+                    );
+                }
+
                 for (j, &qi) in moduli.iter().enumerate() {
                     let old_value = pol.coeffs[j][i];
                     let lut_value = self.matrix_values[j][index as usize];
                     let new_value = f(old_value, lut_value, qi);
                     pol.coeffs[j][i] = new_value;
-
-                    if i < 5 {
-                        println!("Coefficient {}, Modulus {}:", i, j);
-                        println!("  coeff: {}, sign: {}, index: {}", coeff, sign, index);
-                        println!(
-                            "  oldValue: {}, lutValue: {}, qi: {}",
-                            old_value, lut_value, qi
-                        );
-                        println!("  newValue: {}\n", new_value);
-                    }
                 }
             }
         } else {
@@ -199,6 +196,13 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 byte_pointer = new_byte_pointer;
 
                 let index = (coeff & (sign ^ 1)) | ((sign & coeff) << 1);
+
+                if i % 100 == 0 {
+                    println!(
+                        "i: {}, coeff: {}, sign: {}, index: {}",
+                        i, coeff, sign, index
+                    );
+                }
 
                 for (j, &qi) in moduli.iter().enumerate() {
                     pol.coeffs[j][i] =
@@ -262,10 +266,6 @@ impl<R: RngCore + Clone> TernarySampler<R> {
         byte_pointer: usize,
         byte_length: usize,
     ) -> (u64, u64, Vec<u8>, u8, usize) {
-        // println!(
-        //     "Entering kysampling: pointer={}, byte_pointer={}",
-        //     pointer, byte_pointer
-        // );
         let mut d = 0;
         let mut col = 0;
         let col_len = self.matrix_proba.len();
@@ -275,10 +275,8 @@ impl<R: RngCore + Clone> TernarySampler<R> {
         loop {
             for i in current_pointer..8 {
                 d = (d << 1) + 1 - ((random_bytes[current_byte_pointer] >> i) & 1) as i32;
-                // println!("d={}, col={}, i={}", d, col, i);
 
                 if d > col_len as i32 - 1 {
-                    println!("Resampling due to d > col_len - 1");
                     self.prng.fill_bytes(random_bytes);
                     return self.kysampling(random_bytes, 0, 0, byte_length);
                 }
@@ -291,7 +289,6 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                             current_pointer = 0;
                             current_byte_pointer += 1;
                             if current_byte_pointer >= byte_length {
-                                println!("Resampling due to end of buffer");
                                 current_byte_pointer = 0;
                                 self.prng.fill_bytes(random_bytes);
                             }
@@ -301,7 +298,6 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                             (random_bytes[current_byte_pointer] >> (i + 1)) & 1
                         };
 
-                        // println!("Exiting kysampling: row={}, sign={}", row, sign);
                         return (
                             row as u64,
                             sign as u64,
@@ -315,12 +311,10 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 col += 1;
             }
 
-            println!("Moved to next byte");
             current_pointer = 0;
             current_byte_pointer += 1;
 
             if current_byte_pointer >= byte_length {
-                println!("Resampling due to end of buffer");
                 current_byte_pointer = 0;
                 self.prng.fill_bytes(random_bytes);
             }
