@@ -227,7 +227,6 @@ impl<R: RngCore + Clone> TernarySampler<R> {
             // Remove the element in position j of the slice (order not preserved)
             index[j] = index[index.len() - 1];
             index.pop();
-            // index = index[..index.len() - 1].to_vec();
 
             pointer += 1;
 

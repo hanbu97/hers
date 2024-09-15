@@ -9,12 +9,6 @@ use crate::math::ring::{polynomial::Poly, Ring};
 /// Constant used in the Gaussian sampling algorithm
 const RN: f64 = 3.442619855899;
 
-// pub struct GaussianSampler {
-//     base_ring: Ring,
-//     prng: ChaCha20Rng,
-//     xe: DiscreteGaussian,
-//     montgomery: bool,
-// }
 pub struct GaussianSampler<R: RngCore + Clone> {
     base_ring: Ring,
     prng: R,
@@ -27,16 +21,6 @@ pub struct DiscreteGaussian {
     pub sigma: f64,
     pub bound: f64,
 }
-
-// impl GaussianSampler {
-// pub fn new(seed: u64, base_ring: Ring, xe: DiscreteGaussian, montgomery: bool) -> Self {
-//     GaussianSampler {
-//         base_ring,
-//         prng: ChaCha20Rng::seed_from_u64(seed),
-//         xe,
-//         montgomery,
-//     }
-// }
 
 impl<R: RngCore + Clone> GaussianSampler<R> {
     pub fn new(prng: R, base_ring: Ring, xe: DiscreteGaussian, montgomery: bool) -> Self {
@@ -168,14 +152,6 @@ impl<R: RngCore + Clone> GaussianSampler<R> {
         self.read_inner(pol, |a, b, c| (a + b) % c);
     }
 
-    // pub fn at_level(&self, level: usize) -> Self {
-    //     GaussianSampler {
-    //         base_ring: self.base_ring.at_level(level),
-    //         prng: ChaCha20Rng::from_seed(self.prng.get_seed()),
-    //         xe: self.xe,
-    //         montgomery: self.montgomery,
-    //     }
-    // }
     pub fn at_level(&self, level: usize) -> Self {
         GaussianSampler {
             base_ring: self.base_ring.at_level(level),
