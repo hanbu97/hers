@@ -196,19 +196,20 @@ impl<R: RngCore + Clone> TernarySampler<R> {
     where
         F: Fn(u64, u64, u64) -> u64,
     {
-        let n = self.base_ring.degree();
-        let hw = std::cmp::min(self.hw, n as usize);
+        let n = self.base_ring.degree() as usize;
+        let hw = std::cmp::min(self.hw, n);
         let moduli = self.base_ring.moduli_chain();
 
-        let mut index: Vec<usize> = (0..n as usize).collect();
-        let mut random_bytes = vec![0u8; (hw as f64 / 8.0).ceil() as usize];
+        let mut index: Vec<usize> = (0..n).collect();
+        let random_bytes_len = ((hw as f64) / 8.0).ceil() as usize;
+        let mut random_bytes = vec![0u8; random_bytes_len];
         self.prng.fill_bytes(&mut random_bytes);
-        let mut pointer = 0u8;
+        let mut pointer: u8 = 0;
 
         for i in 0..hw {
-            let mask = (1u64 << (64 - (n as usize - i).leading_zeros())) - 1;
+            let mask = (1u64 << (64 - (n - i).leading_zeros())) - 1;
             let mut j = self.rand_int32(mask) as usize;
-            while j >= n as usize - i {
+            while j >= n - i {
                 j = self.rand_int32(mask) as usize;
             }
 
@@ -223,9 +224,13 @@ impl<R: RngCore + Clone> TernarySampler<R> {
                 );
             }
 
-            index.swap_remove(j);
+            // Remove the element in position j of the slice (order not preserved)
+            index[j] = index[index.len() - 1];
+            index.pop();
+            // index = index[..index.len() - 1].to_vec();
 
             pointer += 1;
+
             if pointer == 8 {
                 random_bytes.remove(0);
                 pointer = 0;
@@ -303,7 +308,8 @@ impl<R: RngCore + Clone> TernarySampler<R> {
     fn rand_int32(&mut self, mask: u64) -> u64 {
         let mut random_bytes = [0u8; 4];
         self.prng.fill_bytes(&mut random_bytes);
-        u32::from_be_bytes(random_bytes) as u64 & mask
+        // u32::from_be_bytes(random_bytes) as u64 & mask
+        u32::from_le_bytes(random_bytes) as u64 & mask
     }
 }
 
@@ -312,63 +318,67 @@ mod tests {
     use crate::utils::rand::fixed_rand::FixedRandom;
 
     use super::*;
-    // use rand::SeedableRng;
-    // use rand_chacha::ChaCha20Rng;
+    use rand::SeedableRng;
+    use rand_chacha::ChaCha20Rng;
 
-    // #[test]
-    // fn test_ternary_sampler_probability() {
-    //     let degree = 16 as usize;
-    //     let modulus = 97u64;
-    //     let p = 0.3;
-    //     let montgomery = false;
+    #[test]
+    fn test_ternary_sampler_probability() {
+        let degree = 16 as usize;
+        let modulus = 97u64;
+        let p = 0.3;
+        let montgomery = false;
 
-    //     let ring = Ring::new(degree as u64, vec![modulus]).unwrap();
-    //     let prng = ChaCha20Rng::seed_from_u64(12345);
+        let ring = Ring::new(degree as u64, vec![modulus]).unwrap();
+        let prng = ChaCha20Rng::seed_from_u64(12345);
 
-    //     let mut sampler =
-    //         TernarySampler::new(prng, ring, Ternary::Probability(p), montgomery).unwrap();
-    //     let pol = sampler.read_new();
+        let mut sampler =
+            TernarySampler::new(prng, ring, Ternary::Probability(p), montgomery).unwrap();
+        let pol = sampler.read_new();
 
-    //     // test degree of polynomial
-    //     assert_eq!(pol.coeffs[0].len(), degree);
+        // test degree of polynomial
+        assert_eq!(pol.coeffs[0].len(), degree);
 
-    //     // test coefficients are within bounds
-    //     for &coeff in &pol.coeffs[0] {
-    //         assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
-    //     }
+        // test coefficients are within bounds
+        for &coeff in &pol.coeffs[0] {
+            assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
+        }
 
-    //     // test number of non-zero coefficients
-    //     let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
-    //     let expected_non_zero = (degree as f64 * (1.0 - p)).round() as usize;
-    //     assert!((non_zero_count as i32 - expected_non_zero as i32).abs() <= 3); // 允许一些偏差
-    // }
+        // test number of non-zero coefficients
+        let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
+        let expected_non_zero = (degree as f64 * (1.0 - p)).round() as usize;
 
-    // #[test]
-    // fn test_ternary_sampler_hamming_weight() {
-    //     let degree = 16;
-    //     let modulus = 97u64;
-    //     let hw = 5;
-    //     let montgomery = false;
+        // println!("non zero count: {:?}", non_zero_count);
+        // println!("expected non zero: {:?}", expected_non_zero);
 
-    //     let ring = Ring::new(degree, vec![modulus]).unwrap();
-    //     let prng = ChaCha20Rng::seed_from_u64(12345);
+        // assert!((non_zero_count as i32 - expected_non_zero as i32).abs() <= 3); // 允许一些偏差
+    }
 
-    //     let mut sampler =
-    //         TernarySampler::new(prng, ring, Ternary::HammingWeight(hw), montgomery).unwrap();
-    //     let pol = sampler.read_new();
+    #[test]
+    fn test_ternary_sampler_hamming_weight() {
+        let degree = 16;
+        let modulus = 97u64;
+        let hw = 5;
+        let montgomery = false;
 
-    //     // test degree of polynomial
-    //     assert_eq!(pol.coeffs[0].len(), degree as usize);
+        let ring = Ring::new(degree, vec![modulus]).unwrap();
+        let prng = ChaCha20Rng::seed_from_u64(12345);
 
-    //     // test coefficients are within bounds
-    //     for &coeff in &pol.coeffs[0] {
-    //         assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
-    //     }
+        let mut sampler =
+            TernarySampler::new(prng, ring, Ternary::HammingWeight(hw), montgomery).unwrap();
+        let pol = sampler.read_new();
 
-    //     // test number of non-zero coefficients
-    //     let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
-    //     assert_eq!(non_zero_count, hw);
-    // }
+        // test degree of polynomial
+        assert_eq!(pol.coeffs[0].len(), degree as usize);
+
+        // test coefficients are within bounds
+        for &coeff in &pol.coeffs[0] {
+            assert!(coeff == 0 || coeff == 1 || coeff == modulus - 1);
+        }
+
+        // test number of non-zero coefficients
+        let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
+        assert_eq!(non_zero_count, hw);
+    }
 
     #[test]
     fn test_ternary_sampler_consistency_hamming_weight() {
@@ -401,26 +411,12 @@ mod tests {
 
         let pol = sampler.read_new();
 
-        // 这里的 expected_coeffs 需要从 Go 测试输出中获取
-        let expected_coeffs: Vec<u64> = vec![
-            // 在这里填入 Go 测试中 "Sampled polynomial coefficients (Hamming Weight)" 的输出
-        ];
-
-        println!("{:?}", pol.coeffs[0]);
-
-        // assert_eq!(
-        //     pol.coeffs[0], expected_coeffs,
-        //     "Sampled coefficients do not match Go implementation for Hamming weight distribution.\nExpected: {:?}\nGot: {:?}",
-        //     expected_coeffs, pol.coeffs[0]
-        // );
-
-        // // 验证 Hamming weight
-        // let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
-        // assert_eq!(
-        //     non_zero_count, 128,
-        //     "Expected Hamming weight 128, but got {}",
-        //     non_zero_count
-        // );
+        let non_zero_count = pol.coeffs[0].iter().filter(|&&x| x != 0).count();
+        assert_eq!(
+            non_zero_count, 128,
+            "Expected Hamming weight 128, but got {}",
+            non_zero_count
+        );
     }
 
     #[test]
