@@ -5,6 +5,7 @@ use rand_chacha::ChaCha20Rng;
 pub mod traits;
 
 pub mod gaussian_sampler;
+pub mod sampler;
 pub mod ternary_sampler;
 pub mod uniform_sampler;
 
